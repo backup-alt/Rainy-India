@@ -22,7 +22,21 @@
           "idx": 1,
           "id": "60052075848",
           "name": "Development",
-          "type": 3
+          "type": 3,
+          "deployment": {
+            "stack": "nodejs",
+            "client": {
+              "name": "client"
+            },
+            "functions": {
+              "sherwin_function": {
+                "name": "sherwin_function"
+              }
+            }
+          },
+          "environment": {
+            "NEWSAPI_KEY": "22b49b37fbe245688e926e8cf00ab563"
+          }
         }
       ]
     }

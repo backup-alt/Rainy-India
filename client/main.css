@@ -56,15 +56,12 @@ body {
 /* Main content */
 .main-content {
     min-height: calc(100vh - 70px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 40px 20px;
 }
 
 .container {
-    max-width: 600px;
-    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
     text-align: center;
 }
 
@@ -88,6 +85,7 @@ body {
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     text-align: left;
+    margin-bottom: 30px;
 }
 
 .form-group {
@@ -148,6 +146,118 @@ body {
     cursor: not-allowed;
 }
 
+/* Results section */
+.results-container {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    text-align: left;
+}
+
+.results-container h3 {
+    margin-bottom: 20px;
+    color: #202124;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.updates-list {
+    display: grid;
+    gap: 15px;
+}
+
+.update-item {
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid #1a73e8;
+    background-color: #f8f9fa;
+}
+
+.update-item.holiday {
+    border-left-color: #ea4335;
+    background-color: #fce8e6;
+}
+
+.update-item.no-holiday {
+    border-left-color: #34a853;
+    background-color: #e6f4ea;
+}
+
+.update-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.update-region {
+    font-weight: 600;
+    color: #202124;
+}
+
+.update-status {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-holiday {
+    background-color: #ea4335;
+    color: white;
+}
+
+.status-normal {
+    background-color: #34a853;
+    color: white;
+}
+
+.update-reason {
+    color: #5f6368;
+    margin-bottom: 5px;
+}
+
+.update-confidence {
+    font-size: 14px;
+    color: #5f6368;
+}
+
+.update-proof {
+    margin-top: 8px;
+}
+
+.update-proof a {
+    color: #1a73e8;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.update-proof a:hover {
+    text-decoration: underline;
+}
+
+/* Loading spinner */
+.loading {
+    text-align: center;
+    padding: 40px;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #1a73e8;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 2s linear infinite;
+    margin: 0 auto 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     .page-title {
@@ -156,5 +266,9 @@ body {
     
     .selection-form {
         padding: 30px 20px;
+    }
+    
+    .results-container {
+        padding: 20px;
     }
 }

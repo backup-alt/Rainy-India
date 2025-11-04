@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>India Data Portal</title>
+    <title>India Holiday Updates - Rain & Flood Alerts</title>
     <link rel="stylesheet" href="main.css">
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-logo">
-                <h2>India Data</h2>
+                <h2>Holiday Alerts</h2>
             </div>
             <div class="nav-menu">
                 <button class="sign-in-btn">Sign In</button>
@@ -20,8 +20,8 @@
 
     <main class="main-content">
         <div class="container">
-            <h1 class="page-title">Access Regional Data</h1>
-            <p class="page-subtitle">Select date and location to view customized information</p>
+            <h1 class="page-title">India Holiday Updates</h1>
+            <p class="page-subtitle">Check for rain/flood related holiday declarations</p>
             
             <div class="selection-form">
                 <div class="form-group">
@@ -33,7 +33,6 @@
                     <label for="state">Select State</label>
                     <select id="state" class="form-select">
                         <option value="" disabled selected>Choose a state</option>
-                        <!-- States will be populated by JavaScript -->
                     </select>
                 </div>
                 
@@ -41,11 +40,20 @@
                     <label for="district">Select District</label>
                     <select id="district" class="form-select" disabled>
                         <option value="" disabled selected>First select a state</option>
-                        <!-- Districts will be populated by JavaScript -->
                     </select>
                 </div>
                 
-                <button id="submit-btn" class="submit-btn" disabled>View Data</button>
+                <button id="submit-btn" class="submit-btn" disabled>Check Updates</button>
+            </div>
+
+            <div id="results" class="results-container" style="display: none;">
+                <h3>Latest Updates</h3>
+                <div id="updates-list" class="updates-list"></div>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Checking for updates...</p>
             </div>
         </div>
     </main>

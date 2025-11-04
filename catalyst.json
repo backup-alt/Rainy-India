@@ -1,4 +1,12 @@
 {
+  "id": "23301000000022368",
+  "name": "Sherwin",
+  "description": "Real-time holiday updates for India based on weather conditions",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "website": "",
+  "license": "ISC",
+  "dependencies": [],
   "functions": {
     "targets": [
       "sherwin_function"
