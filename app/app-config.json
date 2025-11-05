@@ -1,0 +1,16 @@
+{
+  "name": "Rainy India",
+  "description": "Live Leave & Holiday Tracker",
+  "icon": "assets/images/logo.png",
+  "category": "Utility",
+  "tags": ["weather", "holidays", "india", "news"],
+  "author": {
+    "name": "Your Name",
+    "email": "your.email@example.com"
+  },
+  "version": "1.0.0",
+  "homepage": "/",
+  "auth": {
+    "required": false
+  }
+}

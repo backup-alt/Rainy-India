@@ -1,0 +1,136 @@
+{
+  "table_name": "Updates",
+  "columns": [
+    {
+      "column_name": "ROWID",
+      "data_type": "bigint",
+      "max_length": 19,
+      "is_unique": true,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "CREATORID",
+      "data_type": "bigint",
+      "max_length": 19,
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "CREATEDTIME",
+      "data_type": "datetime",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "MODIFIEDTIME",
+      "data_type": "datetime",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "update_id",
+      "data_type": "varchar",
+      "max_length": 100,
+      "is_unique": true,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "title",
+      "data_type": "varchar",
+      "max_length": 500,
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "content",
+      "data_type": "text",
+      "is_unique": false,
+      "is_mandatory": false,
+      "default_value": null
+    },
+    {
+      "column_name": "region",
+      "data_type": "varchar",
+      "max_length": 100,
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "state",
+      "data_type": "varchar",
+      "max_length": 100,
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "reason",
+      "data_type": "varchar",
+      "max_length": 200,
+      "is_unique": false,
+      "is_mandatory": false,
+      "default_value": null
+    },
+    {
+      "column_name": "sources",
+      "data_type": "text",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null,
+      "description": "JSON array of sources"
+    },
+    {
+      "column_name": "source_count",
+      "data_type": "int",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": "1"
+    },
+    {
+      "column_name": "confidence",
+      "data_type": "int",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": "0"
+    },
+    {
+      "column_name": "update_timestamp",
+      "data_type": "datetime",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": null
+    },
+    {
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "is_unique": false,
+      "is_mandatory": true,
+      "default_value": "true"
+    }
+  ],
+  "indexes": [
+    {
+      "index_name": "state_index",
+      "columns": ["state"]
+    },
+    {
+      "index_name": "region_index",
+      "columns": ["region"]
+    },
+    {
+      "index_name": "confidence_index",
+      "columns": ["confidence"]
+    },
+    {
+      "index_name": "timestamp_index",
+      "columns": ["update_timestamp"]
+    }
+  ]
+}

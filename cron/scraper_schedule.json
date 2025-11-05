@@ -1,0 +1,12 @@
+{
+  "cron_name": "scraper_schedule",
+  "description": "Runs scrapers every 15 minutes",
+  "cron_url": "/server/rainy_india_function/cron_scraper",
+  "cron_expression": "*/15 * * * *",
+  "timezone": "Asia/Kolkata",
+  "status": "enabled",
+  "notification": {
+    "on_failure": true,
+    "email": "sherwinaniesh@gmai.com"
+  }
+}

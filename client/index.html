@@ -3,61 +3,239 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>India Holiday Updates - Rain & Flood Alerts</title>
-    <link rel="stylesheet" href="main.css">
+    <meta name="description" content="Real-time leave and holiday updates for India due to rain and weather conditions">
+    <title>RainCheck India - Live Holiday & Leave Tracker</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/images/logo.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <h2>Holiday Alerts</h2>
-            </div>
-            <div class="nav-menu">
-                <button class="sign-in-btn">Sign In</button>
-            </div>
-        </div>
-    </nav>
-
-    <main class="main-content">
-        <div class="container">
-            <h1 class="page-title">India Holiday Updates</h1>
-            <p class="page-subtitle">Check for rain/flood related holiday declarations</p>
-            
-            <div class="selection-form">
-                <div class="form-group">
-                    <label for="date">Select Date</label>
-                    <input type="date" id="date" class="form-input">
-                </div>
-                
-                <div class="form-group">
-                    <label for="state">Select State</label>
-                    <select id="state" class="form-select">
-                        <option value="" disabled selected>Choose a state</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="district">Select District</label>
-                    <select id="district" class="form-select" disabled>
-                        <option value="" disabled selected>First select a state</option>
-                    </select>
-                </div>
-                
-                <button id="submit-btn" class="submit-btn" disabled>Check Updates</button>
-            </div>
-
-            <div id="results" class="results-container" style="display: none;">
-                <h3>Latest Updates</h3>
-                <div id="updates-list" class="updates-list"></div>
-            </div>
-
-            <div id="loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>Checking for updates...</p>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loader-container">
+            <div class="loader"></div>
+            <div class="loader-text">
+                <h3>RainCheck India</h3>
+                <p>Loading real-time updates...</p>
             </div>
         </div>
-    </main>
+    </div>
 
-    <script src="main.js"></script>
+    <!-- Main App -->
+    <div id="app" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="header-left">
+                        <div class="logo-container">
+                            <div class="logo-icon">
+                                <i class="fas fa-cloud-showers-heavy"></i>
+                            </div>
+                            <div class="logo-text">
+                                <h1 class="logo">RainCheck</h1>
+                                <p class="tagline">India Holiday Tracker</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="header-right">
+                        <button id="refresh-btn" class="btn btn-primary">
+                            <i class="fas fa-sync-alt"></i>
+                            <span class="btn-text">Refresh Data</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-content">
+                    <h2 class="hero-title">Real-time Holiday Updates</h2>
+                    <p class="hero-subtitle">Track weather-related leave declarations across India with live data from official sources</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Bar -->
+        <section id="stats-bar" class="stats-bar">
+            <div class="container">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="stat-total">0</div>
+                            <div class="stat-label">Active Updates</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value stat-high" id="stat-high">0</div>
+                            <div class="stat-label">High Confidence</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value stat-medium" id="stat-medium">0</div>
+                            <div class="stat-label">Medium Risk</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-map-marked-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value stat-states" id="stat-states">0</div>
+                            <div class="stat-label">States Covered</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters -->
+        <section class="filters">
+            <div class="container">
+                <div class="filters-header">
+                    <h3>Filter Updates</h3>
+                    <p>Narrow down to specific regions and confidence levels</p>
+                </div>
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label for="state-filter">
+                            <i class="fas fa-map"></i>
+                            State
+                        </label>
+                        <select id="state-filter" class="filter-select">
+                            <option value="">All States</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="region-filter">
+                            <i class="fas fa-search-location"></i>
+                            Search Region
+                        </label>
+                        <input type="text" id="region-filter" class="filter-input" placeholder="Enter city or district...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="confidence-filter">
+                            <i class="fas fa-chart-line"></i>
+                            Confidence Level
+                        </label>
+                        <select id="confidence-filter" class="filter-select">
+                            <option value="0">All Updates</option>
+                            <option value="75">High (75%+)</option>
+                            <option value="90">Very High (90%+)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h2 id="updates-count">Latest Updates</h2>
+                        <p class="last-updated" id="last-updated">Loading...</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-outline" id="sort-btn">
+                            <i class="fas fa-sort-amount-down"></i>
+                            Sort
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Updates Container -->
+                <div id="updates-container" class="updates-container">
+                    <!-- Updates will be dynamically inserted here -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state" style="display: none;">
+                    <div class="empty-icon">
+                        <i class="fas fa-inbox"></i>
+                    </div>
+                    <h3>No Updates Found</h3>
+                    <p>Try adjusting your filters or refresh to get the latest data</p>
+                    <button class="btn btn-primary" onclick="location.reload()">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh Page
+                    </button>
+                </div>
+
+                <!-- Error State -->
+                <div id="error-state" class="error-state" style="display: none;">
+                    <div class="error-icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                    <h3>Unable to Load Updates</h3>
+                    <p id="error-message">Please check your connection and try again</p>
+                    <button id="retry-btn" class="btn btn-primary">
+                        <i class="fas fa-redo"></i>
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <div class="footer-content">
+                    <div class="footer-brand">
+                        <div class="logo-container small">
+                            <div class="logo-icon">
+                                <i class="fas fa-cloud-showers-heavy"></i>
+                            </div>
+                            <div class="logo-text">
+                                <h4>RainCheck India</h4>
+                            </div>
+                        </div>
+                        <p class="footer-text">
+                            Real-time weather-related holiday tracking powered by multiple data sources
+                        </p>
+                    </div>
+                    <div class="footer-info">
+                        <p class="footer-subtext">
+                            <i class="fas fa-sync"></i>
+                            Updates every 15 minutes
+                        </p>
+                        <p class="footer-subtext">
+                            <i class="fas fa-check-circle"></i>
+                            Data verified from official sources
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>

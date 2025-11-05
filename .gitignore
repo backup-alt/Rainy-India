@@ -1,0 +1,33 @@
+# Node modules
+node_modules/
+functions/*/node_modules/
+
+# Catalyst
+.catalyst/
+catalyst-config.json
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/
+
+# Temporary files
+*.tmp
+.cache/
