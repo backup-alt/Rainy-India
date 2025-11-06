@@ -7,6 +7,32 @@
   "defaults": {
     "runtime": "nodejs18",
     "memory": "512",
-    "timeout": "30"
-  }
+    "timeout": "30",
+    "project": 1,
+    "env": 1
+  },
+  "actives": {
+    "project": 1,
+    "env": 1
+  },
+  "projects": [
+    {
+      "idx": 1,
+      "id": "23301000000022368",
+      "name": "Sherwin",
+      "domain": {
+        "id": "50035456321",
+        "name": "sherwin-60052075848.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60052075848",
+          "name": "Development",
+          "type": 3
+        }
+      ]
+    }
+  ]
 }

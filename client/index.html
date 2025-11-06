@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Real-time leave and holiday updates for India due to rain and weather conditions">
-    <title>RainCheck India - Live Holiday & Leave Tracker</title>
+    <meta name="description" content="Real-time rain and flood related holiday updates for India">
+    <title>RainCheck India - Live Holiday Tracker</title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="assets/images/logo.png">
@@ -65,6 +65,15 @@
                 <div class="hero-content">
                     <h2 class="hero-title">Real-time Holiday Updates</h2>
                     <p class="hero-subtitle">Track weather-related leave declarations across India with live data from official sources</p>
+                    <div class="search-container">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="global-search" placeholder="Search by city, district, or state...">
+                            <button id="search-btn" class="btn btn-primary">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -131,21 +140,26 @@
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label for="region-filter">
-                            <i class="fas fa-search-location"></i>
-                            Search Region
-                        </label>
-                        <input type="text" id="region-filter" class="filter-input" placeholder="Enter city or district...">
-                    </div>
-                    <div class="filter-group">
                         <label for="confidence-filter">
                             <i class="fas fa-chart-line"></i>
                             Confidence Level
                         </label>
                         <select id="confidence-filter" class="filter-select">
                             <option value="0">All Updates</option>
-                            <option value="75">High (75%+)</option>
-                            <option value="90">Very High (90%+)</option>
+                            <option value="70">High (70%+)</option>
+                            <option value="85">Very High (85%+)</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="status-filter">
+                            <i class="fas fa-flag"></i>
+                            Status
+                        </label>
+                        <select id="status-filter" class="filter-select">
+                            <option value="all">All Status</option>
+                            <option value="holiday">Holiday Declared</option>
+                            <option value="normal">No Holiday</option>
+                            <option value="alert">Weather Alert</option>
                         </select>
                     </div>
                 </div>
@@ -163,7 +177,7 @@
                     <div class="header-actions">
                         <button class="btn btn-outline" id="sort-btn">
                             <i class="fas fa-sort-amount-down"></i>
-                            Sort
+                            Sort by Latest
                         </button>
                     </div>
                 </div>
@@ -171,6 +185,14 @@
                 <!-- Updates Container -->
                 <div id="updates-container" class="updates-container">
                     <!-- Updates will be dynamically inserted here -->
+                </div>
+
+                <!-- Load More -->
+                <div class="load-more-container" id="load-more-container" style="display: none;">
+                    <button id="load-more-btn" class="btn btn-outline">
+                        <i class="fas fa-arrow-down"></i>
+                        Load More Updates
+                    </button>
                 </div>
 
                 <!-- Empty State -->
