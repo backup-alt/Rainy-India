@@ -14,13 +14,21 @@
   },
   "functions": {
     "enabled": true,
-    "source": "functions"
+    "source": "functions",
+    "targets": [
+      "rainy_scraper",
+      "api_handler",
+      "cron_scraper"
+    ]
   },
   "datastore": {
     "enabled": true
   },
   "cron": {
-    "enabled": true
+    "enabled": true,
+    "targets": [
+      "scraper_schedule"
+    ]
   },
   "environment": {
     "production": {
