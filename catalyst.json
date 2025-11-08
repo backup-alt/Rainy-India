@@ -19,7 +19,8 @@
       "rainy_scraper",
       "api_handler",
       "cron_scraper"
-    ]
+    ],
+    "ignore": []
   },
   "datastore": {
     "enabled": true

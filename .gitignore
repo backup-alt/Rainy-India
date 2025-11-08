@@ -2,10 +2,6 @@
 node_modules/
 functions/*/node_modules/
 
-# Catalyst
-.catalyst/
-catalyst-config.json
-
 # Environment variables
 .env
 .env.local

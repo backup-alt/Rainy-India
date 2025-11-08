@@ -1,10 +1,9 @@
 {
-  "name": "rainy_scraper",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "zcatalyst-sdk-node": "^2.0.0",
-    "axios": "^1.6.0",
-    "cheerio": "^1.0.0-rc.12"
-  }
+	"name": "rainy_scraper",
+	"version": "1.0.0",
+	"main": "index.js",
+	"author": "sherwinaniesh@gmail.com",
+	"dependencies": {
+		"zcatalyst-sdk-node": "latest"
+	}
 }

@@ -1,7 +1,9 @@
 {
-  "name": "api_handler",
-  "version": "1.0.0",
-  "description": "Handles API requests for Rainy India",
-  "main": "index.js",
-  "dependencies": {}
+	"name": "api_handler",
+	"version": "1.0.0",
+	"main": "index.js",
+	"author": "sherwinaniesh@gmail.com",
+	"dependencies": {
+		"zcatalyst-sdk-node": "latest"
+	}
 }

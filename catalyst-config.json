@@ -1,0 +1,27 @@
+{
+  "project": {
+    "project_name": "rainy-india",
+    "project_type": "web",
+    "node_version": "18"
+  },
+  "deployment": {
+    "targets": [
+      {
+        "type": "function",
+        "path": "functions/rainy_scraper"
+      },
+      {
+        "type": "function",
+        "path": "functions/api_handler"
+      },
+      {
+        "type": "function",
+        "path": "functions/cron_scraper"
+      },
+      {
+        "type": "client",
+        "path": "client"
+      }
+    ]
+  }
+}
