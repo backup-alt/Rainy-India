@@ -1,10 +1,9 @@
 {
-	"name": "rainy_scraper",
+	"name": "cron_scraper",
 	"version": "1.0.0",
 	"main": "index.js",
 	"author": "sherwinaniesh@gmail.com",
 	"dependencies": {
-		"dotenv": "^17.2.3",
 		"zcatalyst-sdk-node": "latest"
 	}
 }
