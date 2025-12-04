@@ -1,38 +1,41 @@
 const axios = require('axios');
+require('dotenv').config();
 
-// CHANGE THIS LINE:
-const API_KEY = process.env.OPENWEATHER_API_KEY; 
+const API_KEY = process.env.OPENWEATHER_API_KEY;
 
-const cities = [ 'Mumbai', 'Delhi', 'Kolkata', 'Kochi', 'Hyderabad', 'Chennai', 'Bengaluru', 'Thiruvananthapuram' ];
+// Now accepts a list of cities dynamically
+async function getWeather(targetCities) {
+    if (!targetCities || targetCities.length === 0) {
+        console.log("🌤️ No cities to check for weather.");
+        return [];
+    }
 
-async function getWeather() {
-    console.log("🌤️ Fetching weather data...");
+    console.log(`🌤️ Fetching weather for ${targetCities.length} affected districts...`);
     
-    // We use Promise.all to fetch all cities at the same time (faster)
-    const requests = cities.map(city => 
+    // De-duplicate the list
+    const uniqueCities = [...new Set(targetCities)];
+
+    const requests = uniqueCities.map(city => 
         axios.get('https://api.openweathermap.org/data/2.5/weather', {
             params: {
                 q: city,
-                appid: API_KEY, // <--- This fixes the 401 error
+                appid: API_KEY,
                 units: 'metric'
             }
-        }).catch(err => {
-            console.error(`❌ Error fetching weather for ${city}: ${err.message}`);
-            return null; // Return null so one failure doesn't break everything
+        }).then(res => ({
+            city: city, // Keep original name
+            temp: res.data.main.temp,
+            condition: res.data.weather[0].main,
+            description: res.data.weather[0].description,
+            rainMm: (res.data.rain && res.data.rain['1h']) ? res.data.rain['1h'] : 0
+        })).catch(err => {
+            console.error(`   ❌ Weather fetch failed for ${city}: ${err.message}`);
+            return null;
         })
     );
 
     const responses = await Promise.all(requests);
-
-    // Filter out failed requests (nulls) and return clean data
-    return responses
-        .filter(response => response !== null)
-        .map(res => ({
-            city: res.data.name,
-            temp: res.data.main.temp,
-            condition: res.data.weather[0].main,
-            description: res.data.weather[0].description
-        }));
+    return responses.filter(r => r !== null);
 }
 
 module.exports = { getWeather };

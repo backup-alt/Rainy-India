@@ -5,6 +5,7 @@
 	"author": "sherwinaniesh@gmail.com",
 	"dependencies": {
 		"dotenv": "^17.2.3",
+		"rss-parser": "^3.13.0",
 		"zcatalyst-sdk-node": "latest"
 	}
 }

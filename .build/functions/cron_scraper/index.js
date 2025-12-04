@@ -1,17 +1,26 @@
-/**
- * 
- * @param {import('./types/basicio').Context} context 
- * @param {import('./types/basicio').BasicIO} basicIO 
- */
-module.exports = (context, basicIO) => {
-	/* 
-        BASICIO FUNCTIONALITIES
-    */
-	basicIO.write('Hello from index.js'); //response stream (accepts only string, throws error if other than string)
-	basicIO.getArgument('argument1'); // returns QUERY_PARAM[argument1] || BODY_JSON[argument1] (takes argument from query and body, first preference to query)
-	/* 
-        CONTEXT FUNCTIONALITIES
-    */
-	console.log('successfully executed basicio functions');
-	context.close(); //end of application
+const catalyst = require('zcatalyst-sdk-node');
+
+module.exports = async (cronDetails, context) => {
+  const app = catalyst.initialize(context);
+  
+  try {
+    console.log('⏰ Cron Trigger: Starting Flash Check...');
+    
+    // Initialize Functions component
+    const functions = app.functions();
+    
+    // EXECUTE RAINY_SCRAPER WITH "FLASH" ARGUMENT
+    const execution = await functions.functionId('rainy_scraper').execute({
+        args: { 
+            mode: "flash" 
+        } 
+    });
+    
+    console.log('✅ Scraper Output:', execution);
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Cron Failed:', error);
+    return { success: false, error: error.message };
+  }
 };
