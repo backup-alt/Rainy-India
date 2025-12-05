@@ -32,7 +32,7 @@ class Components {
             <div class="update-footer">
                 <div class="update-time">
                     <i class="fas fa-clock"></i>
-                    ${this.formatTime(update.timestamp)}
+                    ${this.formatTime(update.newsDate || update.timestamp)}
                 </div>
                 <div class="update-sources">
                     ${update.sources && update.sources.length > 0 ? 
@@ -101,17 +101,28 @@ class Components {
     static formatSource(source) {
         if (!source) return 'Unknown';
         
-        // Format common source names
+        // Handle if source is an object (common with JSON data)
+        let sourceName = source;
+        if (typeof source === 'object' && source.name) {
+            sourceName = source.name;
+        }
+        
+        if (typeof sourceName !== 'string') return 'Unknown Source';
+
+        // Format common source names to look cleaner
         const sourceMap = {
             'imd': 'IMD',
             'news': 'News',
             'twitter': 'Twitter',
             'government': 'Govt',
-            'weather': 'Weather'
+            'weather': 'Weather',
+            'the times of india': 'Times of India',
+            'hindustan times': 'Hindustan Times',
+            'ndtv': 'NDTV'
         };
         
-        return sourceMap[source.toLowerCase()] || 
-               source.charAt(0).toUpperCase() + source.slice(1);
+        return sourceMap[sourceName.toLowerCase()] || 
+               sourceName.charAt(0).toUpperCase() + sourceName.slice(1);
     }
 
     static formatTime(timestamp) {
@@ -124,14 +135,17 @@ class Components {
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
         
+        // If less than 24 hours, show relative time
         if (diffMins < 1) return 'Just now';
         if (diffMins < 60) return `${diffMins}m ago`;
         if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
         
-        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { 
+        // If older, show the actual date
+        return date.toLocaleDateString(undefined, { 
+            month: 'short', 
+            day: 'numeric',
             hour: '2-digit', 
-            minute: '2-digit' 
+            minute: '2-digit'
         });
     }
 }

@@ -35,6 +35,7 @@ class API {
                 sourceCount: update.sourceCount || update.sources?.length || 0,
                 confidence: update.confidence,
                 timestamp: update.timestamp,
+                newsDate: update.newsDate,
                 isHoliday: update.confidence >= 70 // Assume high confidence means holiday likely
             }));
         } catch (error) {

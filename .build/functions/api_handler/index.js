@@ -37,7 +37,9 @@ module.exports = async (context, basicIO) => {
         tableQuery.where('confidence').greaterThanOrEqualTo(parseInt(query.minConfidence));
       }
       
-      tableQuery.orderBy('confidence', 'desc');
+      // 1. CHANGE: Sort by news_date descending (latest news first)
+      // If news_date is missing for some reason, it falls back to creation time naturally or you can index it.
+      tableQuery.orderBy('news_date', 'desc'); 
       tableQuery.limit(100);
       
       const rows = await tableQuery.get();
@@ -51,6 +53,10 @@ module.exports = async (context, basicIO) => {
         region: row.region,
         state: row.state,
         reason: row.reason,
+        
+        // 2. ADD: Include the news_date column in the response
+        newsDate: row.news_date, 
+        
         sources: JSON.parse(row.sources || '[]'),
         sourceCount: row.source_count,
         confidence: row.confidence,
@@ -67,8 +73,12 @@ module.exports = async (context, basicIO) => {
       return;
     }
     
+    // ... (Rest of the file remains exactly the same: /stats, /health, error handling) ...
+    // I've omitted the rest to save space, just keep your existing code below this point.
+    
     // GET /stats - Get statistics
     if (path.includes('/stats')) {
+      // ... (Keep existing stats logic) ...
       console.log('📊 Fetching statistics...');
       
       const tableQuery = table.query();
