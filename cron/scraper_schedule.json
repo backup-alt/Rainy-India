@@ -1,7 +1,7 @@
 {
   "cron_name": "scraper_schedule",
   "description": "Runs scrapers every 15 minutes",
-  "cron_url": "/server/cron_scraper", 
+  "cron_url": "/server/cron_scraper",
   "cron_expression": "*/15 * * * *",
   "timezone": "Asia/Kolkata",
   "status": "enabled",
