@@ -28,7 +28,7 @@
   "appSail": [
     {
         "source": "vision-service",
-        "stack": "node18",
+        "stack": "docker",
         "build_path": ".",
         "name": "vision",
         "command": "npm start",
