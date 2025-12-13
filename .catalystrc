@@ -30,7 +30,38 @@
           "idx": 1,
           "id": "60052075848",
           "name": "Development",
-          "type": 3
+          "type": 3,
+          "env_status": "Active",
+          "project_details": {
+            "project_name": "Sherwin",
+            "id": "23301000000022368",
+            "project_type": "Live"
+          },
+          "is_default": false,
+          "action_required": false
+        },
+        {
+          "idx": 2,
+          "id": "50035549486",
+          "name": "Production",
+          "type": 1,
+          "env_status": "Active",
+          "project_details": {
+            "project_name": "Sherwin",
+            "id": "23301000000022368",
+            "project_type": "Live"
+          },
+          "is_default": true,
+          "clone_env_id": "60052075848",
+          "migrated_services": {
+            "migrated_services": [
+              "Settings",
+              "Cloud Scale",
+              "Serverless"
+            ],
+            "is_catalyst_migrated": true
+          },
+          "action_required": false
         }
       ]
     }

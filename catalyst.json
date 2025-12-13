@@ -46,5 +46,15 @@
         "TWITTER_BEARER_TOKEN": "AAAAAAAAAAAAAAAAAAAAAD425QEAAAAApuyBNHY7TdpIswUTHVLBCZMpM98%3Dyu8pywnWrE7UyBtAtXB1erSEmLBDsvsQgV7brze26L2Yv6as3e"
       }
     }
-  }
+  },
+
+"appSail": [
+    {
+        "source": "vision-service",
+        "stack": "node18",
+        "build_path": ".",
+        "name": "vision",
+        "command": "Activate Vision"
+    }
+ ]
 }

@@ -10,41 +10,59 @@ const { processData } = require('./utils/processor');
 
 const API_KEY = process.env.NEWS_API_KEY;
 
+// Cities to check 24/7 (Predictive Mode)
+const WATCHLIST = [
+    'Chennai', 'Mumbai', 'Bengaluru', 'Kochi', 'Hyderabad', 
+    'Visakhapatnam', 'Puducherry', 'Cuddalore', 'Nagapattinam', 'Thiruvananthapuram'
+];
+
 module.exports = async (context, basicIO) => {
     const app = catalyst.initialize(context);
     const mode = basicIO.getArgument('mode');
 
     // ====================================================
-    // ⚡ MODE 1: FLASH UPDATE (RSS - Fast & Free)
-    // Usage: rainy_scraper({ "mode": "flash" })
+    // ⚡ MODE 1: FLASH UPDATE (RSS + Watchlist)
+    // Run this frequently (e.g., every 15 mins)
     // ====================================================
     if (mode === 'flash') {
         try {
-            console.log('⚡ Starting Flash Scraper (RSS Mode)...');
+            console.log('⚡ Starting Flash Scraper (RSS + Watchlist)...');
             
-            // 1. Poll RSS Feeds (Instant)
-            const rssResults = await checkRSS();
+            // 1. Run Checks in Parallel (Fast)
+            const [rssResults, watchlistWeather] = await Promise.all([
+                checkRSS(),             // Check breaking news (Free)
+                getWeather(WATCHLIST)   // Check heavy rain in key cities (Free)
+            ]);
             
-            if (rssResults.length > 0) {
-                console.log(`   ⚡ Found ${rssResults.length} breaking alerts.`);
-                
-                // 2. Verify with Weather (Only for specific cities found)
-                const affectedCities = rssResults.map(n => n.city);
-                const weatherResults = await getWeather(affectedCities);
-                
-                // 3. Process & Save
-                const activeUpdates = processData(weatherResults, rssResults);
+            // 2. Combine Weather Targets
+            // We want weather for cities found in RSS + our Watchlist
+            const rssCities = rssResults.map(n => n.city);
+            const uniqueRssCities = rssCities.filter(c => !WATCHLIST.includes(c));
+            
+            // Fetch weather for any NEW cities found in RSS
+            const rssWeather = await getWeather(uniqueRssCities);
+            
+            // Merge all weather data
+            const allWeatherData = [...watchlistWeather, ...rssWeather];
+
+            console.log(`   ⚡ Status: ${rssResults.length} news alerts, ${allWeatherData.length} weather reports.`);
+
+            // 3. Process & Save
+            // Now the processor sees weather data even if news is empty!
+            const activeUpdates = processData(allWeatherData, rssResults);
+            
+            if (activeUpdates.length > 0) {
                 await saveUpdates(app, activeUpdates);
-                
                 basicIO.write(JSON.stringify({ 
                     status: 'success', 
                     type: 'flash',
                     updates_found: activeUpdates.length 
                 }));
             } else {
-                console.log("   ⚡ No breaking alerts found.");
-                basicIO.write(JSON.stringify({ status: 'success', message: 'No new alerts' }));
+                console.log("   ⚡ No significant updates found.");
+                basicIO.write(JSON.stringify({ status: 'success', message: 'No updates needed' }));
             }
+
         } catch (err) {
             console.error('❌ Flash Scraper Error:', err);
             basicIO.write(JSON.stringify({ status: 'error', error: err.message }));
@@ -55,7 +73,6 @@ module.exports = async (context, basicIO) => {
 
     // ====================================================
     // 📜 MODE 2: REAL HISTORY (Backfill - 30 Days)
-    // Usage: rainy_scraper({ "mode": "real_history" })
     // ====================================================
     if (mode === 'real_history') {
         console.log("🔥 STARTING 30-DAY HISTORY BACKFILL...");
@@ -68,26 +85,20 @@ module.exports = async (context, basicIO) => {
                 
                 console.log(`\n📅 Processing Date: ${dateStr}`);
                 
-                // Fetch News for this specific day
                 const newsResults = await getNews(dateStr, dateStr);
                 
                 if (newsResults.length > 0) {
                     const affectedCities = newsResults.map(n => n.city);
                     const weatherResults = await getWeather(affectedCities);
-                    
-                    // Rule-Based Processing (No AI)
                     const activeUpdates = processData(weatherResults, newsResults);
-                    
                     await saveUpdates(app, activeUpdates);
                 }
                 
-                // Sleep 1s to prevent API Limit errors
                 await new Promise(r => setTimeout(r, 1000));
             }
             basicIO.write(JSON.stringify({ status: 'success', message: 'History backfill complete' }));
         } catch (err) {
             console.error('❌ History Error:', err);
-            // Stop if we hit the limit
             if (err.message === "API_LIMIT_REACHED") {
                 basicIO.write(JSON.stringify({ status: 'error', error: 'API Limit Reached' }));
             } else {
@@ -99,38 +110,24 @@ module.exports = async (context, basicIO) => {
     }
 
     // ====================================================
-    // 🚀 MODE 3: PRODUCTION (Default - Scheduled Job)
-    // Features: Deep Search + Predictive Watchlist
+    // 🚀 MODE 3: PRODUCTION (Default - Manual/Daily Deep Check)
     // ====================================================
     try {
-        console.log('🚀 Starting Rainy India Scraper (Predictive Mode)...');
+        console.log('🚀 Starting Deep Scraper (Production Mode)...');
         
-        // 1. DEFINE WATCHLIST (Cities to monitor 24/7)
-        // These get checked for weather even if there is NO news.
-        const WATCHLIST = [
-            'Chennai', 'Mumbai', 'Bengaluru', 'Kochi', 'Hyderabad', 
-            'Visakhapatnam', 'Puducherry', 'Cuddalore', 'Nagapattinam', 'Thiruvananthapuram'
-        ];
-
-        // 2. PARALLEL FETCH (News + Watchlist Weather)
         const [newsResults, watchlistWeather] = await Promise.all([
-            getNews(),              // Check for confirmed holidays (Last 24h)
-            getWeather(WATCHLIST)   // Check for predictive alerts (Heavy Rain)
+            getNews(),              
+            getWeather(WATCHLIST)   
         ]);
 
-        // 3. MERGE TARGETS
-        // Get weather for any NEW cities found in the news (that aren't in watchlist)
         const newsCities = newsResults.map(n => n.city);
         const uniqueNewsCities = newsCities.filter(c => !WATCHLIST.includes(c)); 
-        
         const newsWeather = await getWeather(uniqueNewsCities);
 
-        // Combine all weather data (Watchlist + News-Driven)
         const allWeatherData = [...watchlistWeather, ...newsWeather];
 
         console.log(`✅ Data: ${allWeatherData.length} weather reports, ${newsResults.length} news articles`);
 
-        // 4. PROCESS (Processor will now see high rain even without news)
         const activeUpdates = processData(allWeatherData, newsResults);
         
         if (activeUpdates.length === 0) {
@@ -140,7 +137,6 @@ module.exports = async (context, basicIO) => {
             return;
         }
 
-        // 5. Save to Database
         await saveUpdates(app, activeUpdates);
 
         basicIO.write(JSON.stringify({ 
@@ -167,7 +163,6 @@ async function saveUpdates(app, updates) {
     
     for (const update of updates) {
         try {
-            // Check for existing record to avoid duplicates
             const query = `SELECT ROWID FROM Updates WHERE update_id = '${update.update_id}'`;
             const existingResult = await zcql.executeZCQLQuery(query);
             
@@ -179,16 +174,13 @@ async function saveUpdates(app, updates) {
                 state: update.state,
                 reason: update.reason,
                 
-                // Timestamps
                 news_date: update.news_date, 
                 update_timestamp: new Date().toISOString(),
                 
-                // Classification Fields (Rule-Based)
                 category: update.category,
                 holiday_type: update.holiday_type,
                 summary: update.summary,
 
-                // Metadata
                 sources: JSON.stringify(update.sources),
                 source_count: update.sources.length,
                 confidence: update.confidence,

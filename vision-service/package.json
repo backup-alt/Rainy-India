@@ -1,0 +1,19 @@
+{
+  "name": "vision-monitor",
+  "version": "1.0.0",
+  "description": "Tamil News Ticker Monitor using OCR",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "jimp": "^0.22.10",
+    "puppeteer": "^21.5.0",
+    "tesseract.js": "^5.0.3",
+    "zcatalyst-sdk-node": "latest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
