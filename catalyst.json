@@ -1,13 +1,8 @@
 {
   "projectName": "rainy-india",
-  "projectId": null,
   "projectVersion": "1.0",
   "projectType": "web",
   "nodeVersion": "18",
-  "domain": {
-    "production": "",
-    "development": ""
-  },
   "client": {
     "enabled": true,
     "source": "client"
@@ -19,8 +14,7 @@
       "rainy_scraper",
       "api_handler",
       "cron_scraper"
-    ],
-    "ignore": []
+    ]
   },
   "datastore": {
     "enabled": true
@@ -31,30 +25,15 @@
       "scraper_schedule"
     ]
   },
-  "environment": {
-    "production": {
-      "variables": {
-        "NEWS_API_KEY": "1bd2a475e61448e08b7f06564b28ad44",
-        "OPENWEATHER_API_KEY": "812bce55998050c409078e31ff2d7e2c",
-        "TWITTER_BEARER_TOKEN": "AAAAAAAAAAAAAAAAAAAAAD425QEAAAAApuyBNHY7TdpIswUTHVLBCZMpM98%3Dyu8pywnWrE7UyBtAtXB1erSEmLBDsvsQgV7brze26L2Yv6as3e"
-      }
-    },
-    "development": {
-      "variables": {
-        "NEWS_API_KEY": "1bd2a475e61448e08b7f06564b28ad44",
-        "OPENWEATHER_API_KEY": "812bce55998050c409078e31ff2d7e2c",
-        "TWITTER_BEARER_TOKEN": "AAAAAAAAAAAAAAAAAAAAAD425QEAAAAApuyBNHY7TdpIswUTHVLBCZMpM98%3Dyu8pywnWrE7UyBtAtXB1erSEmLBDsvsQgV7brze26L2Yv6as3e"
-      }
-    }
-  },
-
-"appSail": [
+  "appSail": [
     {
         "source": "vision-service",
         "stack": "node18",
         "build_path": ".",
         "name": "vision",
-        "command": "Activate Vision"
+        "command": "npm start",
+        "env_variables": {},
+        "memory": 1024
     }
- ]
+  ]
 }
