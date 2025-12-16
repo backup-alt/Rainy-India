@@ -1,4 +1,4 @@
-name: News Cameraman (Creator Mode)
+name: News Cameraman (Self-Hosted)
 
 on: 
   workflow_dispatch:
@@ -9,60 +9,32 @@ on:
 
 jobs:
   watch-news:
-    runs-on: ubuntu-latest
+    # THIS LINE IS THE KEY: It sends the job to your laptop
+    runs-on: self-hosted
     timeout-minutes: 360
 
     steps:
-    - uses: actions/checkout@v3
-
-    # 1. Install Node.js (Critical for solving puzzles)
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
-
-    # 2. Install Tools (FFmpeg + Latest yt-dlp via Python)
-    - name: Install Tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg python3-pip
-        # Force install the absolute latest yt-dlp
-        sudo pip3 install -U "yt-dlp[default]" --break-system-packages
-
-    # 3. Find the Stream (Using Android Creator Client)
+    # 1. We don't need to install tools every time if you have them installed globally.
+    #    Just make sure 'ffmpeg' and 'yt-dlp' are in your laptop's PATH.
+    
+    # 2. Find the Stream
     - name: Get Stream URL
-      id: get_stream
+      shell: cmd # Use 'bash' if on Mac/Linux
       run: |
-        YOUTUBE_URL="https://www.youtube.com/@ThanthiTV/live"
-        echo "🔍 Looking for stream using Android Creator Mode..."
+        echo "🔍 Finding Thanthi TV Stream..."
         
-        # We use 'android_creator' (YouTube Studio App). 
-        # YouTube is very reluctant to block this client.
-        STREAM_URL=$(python3 -m yt_dlp --extractor-args "youtube:player_client=android_creator" -f 94/93/95/best -g "$YOUTUBE_URL")
+        # We use standard yt-dlp. Since it's a home IP, we don't need fancy disguises.
+        # Make sure you installed yt-dlp on your laptop: "pip install yt-dlp"
+        yt-dlp -f 94/93/95/best -g "https://www.youtube.com/@ThanthiTV/live" > stream_url.txt
         
-        if [ -z "$STREAM_URL" ]; then
-           echo "❌ Failed to find stream. Trying backup 'android' client..."
-           # Backup: Try standard Android client if Creator fails
-           STREAM_URL=$(python3 -m yt_dlp --extractor-args "youtube:player_client=android" -f 94/93/95/best -g "$YOUTUBE_URL")
-        fi
+        set /p STREAM_URL=<stream_url.txt
+        echo "Found: %STREAM_URL%"
         
-        if [ -z "$STREAM_URL" ]; then
-           echo "❌ All attempts failed."
-           exit 1
-        fi
-
-        echo "✅ Found Stream!"
-        echo "STREAM_URL=$STREAM_URL" >> $GITHUB_ENV
-
-    # 4. Start Capture (Cropped)
-    - name: Capture Screenshots
-      run: |
+        # Capture Video (Cropped)
         echo "📸 Starting Capture..."
-        
-        # Capture command (Cropped Bottom Bar)
-        ffmpeg -headers "User-Agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36" -i "$STREAM_URL" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+        ffmpeg -i "%STREAM_URL%" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%%04d.jpg
 
-    # 5. Save Evidence
+    # 3. Upload Evidence (Back to Cloud)
     - name: Upload Evidence
       if: always()
       uses: actions/upload-artifact@v4
