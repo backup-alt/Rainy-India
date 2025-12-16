@@ -49,7 +49,7 @@ jobs:
         # Note: We pass cookies to ffmpeg too via headers just in case
         ffmpeg -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
         -i "$STREAM_URL" \
-        -vf "fps=0.4,scale=854:480" \
+        -vf "fps=0.4,scale=854:480,crop=854:120:0:360"
         -t ${{ inputs.duration }} \
         -q:v 5 \
         screenshot_%04d.jpg
