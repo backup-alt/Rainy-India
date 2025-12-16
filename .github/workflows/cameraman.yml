@@ -31,9 +31,15 @@ jobs:
         # Thanthi TV Live URL
         YOUTUBE_URL=""https://www.youtube.com/@ThanthiTV/live""
         
-        # Use yt-dlp to get the raw .m3u8 link
-        echo "🔍 Looking for stream..."
-        STREAM_URL=$(yt-dlp -f 94/93/95/best -g $YOUTUBE_URL)
+        echo "🔍 Looking for the current live stream..."
+        
+        # 1. Update yt-dlp to the absolute latest version (fixes the JS warning)
+        sudo yt-dlp -U
+        
+        # 2. Extract the stream URL (added --check-formats to be safe)
+        STREAM_URL=$(yt-dlp -f 94/93/95/best -g "$YOUTUBE_URL")
+        
+        echo "✅ Found Stream: $STREAM_URL"
         echo "STREAM_URL=$STREAM_URL" >> $GITHUB_ENV
 
     # 3. Start Recording (Takes 1 photo every 2.5 seconds)
