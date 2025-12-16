@@ -1,4 +1,4 @@
-name: News Cameraman (Authenticated)
+name: News Cameraman (iPhone Mode)
 
 on: 
   workflow_dispatch:
@@ -15,48 +15,43 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    # 1. Install Tools
+    # 1. Install Modern Node.js (Critical for solving YouTube puzzles)
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    # 2. Install FFmpeg & yt-dlp
     - name: Install Tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg nodejs
+        sudo apt-get install -y ffmpeg
+        # Install latest yt-dlp
         sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
         sudo chmod a+rx /usr/local/bin/yt-dlp
 
-    # 2. Create the Cookie File from the Secret
-    - name: Create Cookie File
-      run: |
-        echo "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
-
-    # 3. Find the Stream (Using Cookies to Login)
+    # 3. Find the Stream (Spoofing an iPhone)
     - name: Get Stream URL
       id: get_stream
       run: |
         YOUTUBE_URL="https://www.youtube.com/@ThanthiTV/live"
-        echo "🔍 Logging in and looking for stream..."
+        echo "🔍 Looking for stream as iOS Device..."
         
-        # We pass --cookies cookies.txt to prove we are human
-        STREAM_URL=$(yt-dlp --cookies cookies.txt -f 94/93/95/best -g "$YOUTUBE_URL")
+        # We use 'ios' client. This usually bypasses the login requirement.
+        STREAM_URL=$(yt-dlp --extractor-args "youtube:player_client=ios" -f 94/93/95/best -g "$YOUTUBE_URL")
         
         echo "✅ Found Stream!"
         echo "STREAM_URL=$STREAM_URL" >> $GITHUB_ENV
 
-    # 4. Start Capture
+    # 4. Start Capture (Cropped Bottom Bar)
     - name: Capture Screenshots
       run: |
-        echo "📸 Starting Capture..."
-        ffmpeg -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" -i "$STREAM_URL" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
-        -i "$STREAM_URL" \
-        -vf "fps=0.4,scale=854:480,crop=854:120:0:360"
-        -t ${{ inputs.duration }} \
-        -q:v 5 \
-        screenshot_%04d.jpg
+        echo "📸 Starting Capture (Bottom News Bar Only)..."
+        
+        # ONE LINE COMMAND to avoid errors
+        ffmpeg -headers "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" -i "$STREAM_URL" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
 
-    # 5. Cleanup & Save
-    - name: Cleanup Secrets
-      if: always()
-      run: rm cookies.txt # Delete the key immediately after use
-
+    # 5. Upload Evidence
     - name: Upload Evidence
       if: always()
       uses: actions/upload-artifact@v4
