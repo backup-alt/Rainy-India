@@ -1,4 +1,4 @@
-name: News Cameraman
+name: News Cameraman (Authenticated)
 
 on: 
   workflow_dispatch:
@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    # 1. Install Tools (Added Node.js to fix the JS warning)
+    # 1. Install Tools
     - name: Install Tools
       run: |
         sudo apt-get update
@@ -23,35 +23,42 @@ jobs:
         sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
         sudo chmod a+rx /usr/local/bin/yt-dlp
 
-    # 2. Find the Stream (Using Android Spoofing)
+    # 2. Create the Cookie File from the Secret
+    - name: Create Cookie File
+      run: |
+        echo "${{ secrets.YOUTUBE_COOKIES }}" > cookies.txt
+
+    # 3. Find the Stream (Using Cookies to Login)
     - name: Get Stream URL
       id: get_stream
       run: |
-        # Thanthi TV Permanent Live Link
         YOUTUBE_URL="https://www.youtube.com/@ThanthiTV/live"
+        echo "🔍 Logging in and looking for stream..."
         
-        echo "🔍 Looking for stream..."
-        
-        # FIX: We tell YouTube we are an 'Android' phone, not a web browser.
-        # This usually bypasses the "Sign in to confirm" error.
-        STREAM_URL=$(yt-dlp --extractor-args "youtube:player_client=android" -f 94/93/95/best -g "$YOUTUBE_URL")
+        # We pass --cookies cookies.txt to prove we are human
+        STREAM_URL=$(yt-dlp --cookies cookies.txt -f 94/93/95/best -g "$YOUTUBE_URL")
         
         echo "✅ Found Stream!"
         echo "STREAM_URL=$STREAM_URL" >> $GITHUB_ENV
 
-    # 3. Start Capture
+    # 4. Start Capture
     - name: Capture Screenshots
       run: |
-        echo "📸 Starting Capture for ${{ inputs.duration }} seconds..."
+        echo "📸 Starting Capture..."
         
-        # Using the discovered stream URL
-        ffmpeg -i "$STREAM_URL" \
+        # Note: We pass cookies to ffmpeg too via headers just in case
+        ffmpeg -headers "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+        -i "$STREAM_URL" \
         -vf "fps=0.4,scale=854:480" \
         -t ${{ inputs.duration }} \
         -q:v 5 \
         screenshot_%04d.jpg
 
-    # 4. Save Evidence
+    # 5. Cleanup & Save
+    - name: Cleanup Secrets
+      if: always()
+      run: rm cookies.txt # Delete the key immediately after use
+
     - name: Upload Evidence
       if: always()
       uses: actions/upload-artifact@v4
