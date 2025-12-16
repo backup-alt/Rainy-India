@@ -1,0 +1,57 @@
+name: News Cameraman
+
+# This allows Zoho to wake up this script remotely
+on: 
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'How long to watch? (seconds)'
+        default: '3600' # Default 1 hour
+
+jobs:
+  watch-news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360 # Max 6 hours
+
+    steps:
+    - uses: actions/checkout@v3
+
+    # 1. Install Tools (The "Camera" and the "Key")
+    - name: Install FFmpeg & yt-dlp
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+        sudo chmod a+rx /usr/local/bin/yt-dlp
+
+    # 2. Find the Secret Stream Link
+    - name: Get Stream URL
+      id: get_stream
+      run: |
+        # Thanthi TV Live URL
+        YOUTUBE_URL="https://www.youtube.com/watch?v=Ra61Z5Cqu44"
+        
+        # Use yt-dlp to get the raw .m3u8 link
+        echo "🔍 Looking for stream..."
+        STREAM_URL=$(yt-dlp -f 94/93/95/best -g $YOUTUBE_URL)
+        echo "STREAM_URL=$STREAM_URL" >> $GITHUB_ENV
+
+    # 3. Start Recording (Takes 1 photo every 2.5 seconds)
+    - name: Capture Screenshots
+      run: |
+        echo "📸 Starting Capture for ${{ inputs.duration }} seconds..."
+        
+        # Capture frames, resize to 480p to save space
+        ffmpeg -i "$STREAM_URL" \
+        -vf "fps=0.4,scale=854:480" \
+        -t ${{ inputs.duration }} \
+        -q:v 5 \
+        screenshot_%04d.jpg
+
+    # 4. Save the photos to a Zip file
+    - name: Upload Evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: thanthi-tv-evidence
+        path: "*.jpg"
