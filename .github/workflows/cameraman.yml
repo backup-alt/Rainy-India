@@ -16,22 +16,25 @@ jobs:
     - name: Get Stream & Capture
       shell: powershell
       run: |
+        Write-Host "🔍 Debugging Tools..."
+        python --version
+        
         Write-Host "🔍 Finding Thanthi TV Stream..."
         
-        # 1. Get the Stream URL (Simple Mode for Windows)
-        # We removed the 'ios' spoofing because your laptop works better without it!
-        $StreamUrl = yt-dlp -f best -g "https://www.youtube.com/@ThanthiTV/live"
+        # FIX: We use 'python -m yt_dlp' to bypass any broken shortcut paths
+        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" 2>&1
         
-        if (-not $StreamUrl) {
-           Write-Error "❌ Could not find stream URL! Check if yt-dlp is installed."
-           exit 1
+        # Check if we got a real URL or an error message
+        if ($StreamUrl -match "https") {
+             Write-Host "✅ Found Stream: $StreamUrl"
+             
+             Write-Host "📸 Starting Capture..."
+             ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+        } else {
+             Write-Error "❌ FAILED to get Stream URL. Here is what Python said:"
+             Write-Host $StreamUrl
+             exit 1
         }
-
-        Write-Host "✅ Found Stream: $StreamUrl"
-        
-        # 2. Start Capture (Cropped for Ticker)
-        Write-Host "📸 Starting Capture..."
-        ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
 
     - name: Upload Evidence
       if: always()
