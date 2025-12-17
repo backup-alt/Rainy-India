@@ -18,8 +18,9 @@ jobs:
       run: |
         Write-Host "🔍 Finding Thanthi TV Stream..."
         
-        # 1. Get the Stream URL using yt-dlp
-        $StreamUrl = yt-dlp --extractor-args "youtube:player_client=ios" -f 94/93/95/best -g "https://www.youtube.com/@ThanthiTV/live"
+        # 1. Get the Stream URL (Simple Mode for Windows)
+        # We removed the 'ios' spoofing because your laptop works better without it!
+        $StreamUrl = yt-dlp -f best -g "https://www.youtube.com/@ThanthiTV/live"
         
         if (-not $StreamUrl) {
            Write-Error "❌ Could not find stream URL! Check if yt-dlp is installed."
@@ -30,7 +31,7 @@ jobs:
         
         # 2. Start Capture (Cropped for Ticker)
         Write-Host "📸 Starting Capture..."
-        ffmpeg -headers "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)" -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+        ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
 
     - name: Upload Evidence
       if: always()
