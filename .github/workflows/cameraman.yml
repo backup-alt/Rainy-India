@@ -6,6 +6,10 @@ on:
       duration:
         description: 'How long to watch? (seconds)'
         default: '60'
+      # We put your Zoho URL here so you can change it easily if needed
+      brain_url:
+        description: 'Zoho Brain URL'
+        default: 'https://vision-50035456321.development.catalystappsail.in/process-image'
 
 jobs:
   watch-news:
@@ -16,28 +20,42 @@ jobs:
     - name: Get Stream & Capture
       shell: powershell
       run: |
-        Write-Host "--- Debugging Tools ---"
-        python --version
-        
         Write-Host "--- Finding Thanthi TV Stream ---"
         
-        # FIX: Added '--no-warnings' so PowerShell doesn't panic at text output
-        # We also added '2>$null' to force-silence any other non-critical errors
+        # 1. Get the link silently
         $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings 2>$null
         
-        # Check if we got a link
         if ($StreamUrl -match "^http") {
-             Write-Host "Found Stream URL!"
-             Write-Host $StreamUrl
+             Write-Host "✅ Found Stream!"
              
              Write-Host "--- Starting Capture ---"
-             ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+             # Capture 1 frame every 5 seconds (fps=0.2) to avoid spamming the server
+             ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
         } else {
-             Write-Error "FAILED to get Stream URL. The variable was empty."
+             Write-Error "❌ FAILED to get Stream URL."
              exit 1
         }
 
-    - name: Upload Evidence
+    - name: Upload to Brain (Zoho)
+      shell: powershell
+      run: |
+        Write-Host "--- Sending Evidence to Brain ---"
+        $ServerUrl = "${{ inputs.brain_url }}"
+        
+        # Get all jpg files
+        $Images = Get-ChildItem *.jpg
+        
+        foreach ($Img in $Images) {
+            Write-Host "🚀 Uploading $($Img.Name)..."
+            
+            # We use curl because it handles file uploads better than PowerShell
+            # Note: We assume your Node.js code expects the file field named 'image'
+            curl -F "image=@$($Img.Name)" $ServerUrl
+            
+            Write-Host "" # New line
+        }
+
+    - name: Backup Evidence
       if: always()
       uses: actions/upload-artifact@v4
       with:
