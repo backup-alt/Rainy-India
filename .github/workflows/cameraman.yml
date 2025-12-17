@@ -1,40 +1,37 @@
-name: News Cameraman (Self-Hosted)
+name: News Cameraman (Self-Hosted Windows)
 
-on: 
+on:
   workflow_dispatch:
     inputs:
       duration:
         description: 'How long to watch? (seconds)'
-        default: '3600'
+        default: '60'
 
 jobs:
   watch-news:
-    # THIS LINE IS THE KEY: It sends the job to your laptop
     runs-on: self-hosted
     timeout-minutes: 360
 
     steps:
-    # 1. We don't need to install tools every time if you have them installed globally.
-    #    Just make sure 'ffmpeg' and 'yt-dlp' are in your laptop's PATH.
-    
-    # 2. Find the Stream
-    - name: Get Stream URL
-      shell: cmd # Use 'bash' if on Mac/Linux
+    - name: Get Stream & Capture
+      shell: powershell
       run: |
-        echo "🔍 Finding Thanthi TV Stream..."
+        Write-Host "🔍 Finding Thanthi TV Stream..."
         
-        # We use standard yt-dlp. Since it's a home IP, we don't need fancy disguises.
-        # Make sure you installed yt-dlp on your laptop: "pip install yt-dlp"
-        yt-dlp -f 94/93/95/best -g "https://www.youtube.com/@ThanthiTV/live" > stream_url.txt
+        # 1. Get the Stream URL using yt-dlp
+        $StreamUrl = yt-dlp --extractor-args "youtube:player_client=ios" -f 94/93/95/best -g "https://www.youtube.com/@ThanthiTV/live"
         
-        set /p STREAM_URL=<stream_url.txt
-        echo "Found: %STREAM_URL%"
-        
-        # Capture Video (Cropped)
-        echo "📸 Starting Capture..."
-        ffmpeg -i "%STREAM_URL%" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%%04d.jpg
+        if (-not $StreamUrl) {
+           Write-Error "❌ Could not find stream URL! Check if yt-dlp is installed."
+           exit 1
+        }
 
-    # 3. Upload Evidence (Back to Cloud)
+        Write-Host "✅ Found Stream: $StreamUrl"
+        
+        # 2. Start Capture (Cropped for Ticker)
+        Write-Host "📸 Starting Capture..."
+        ffmpeg -headers "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)" -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+
     - name: Upload Evidence
       if: always()
       uses: actions/upload-artifact@v4
