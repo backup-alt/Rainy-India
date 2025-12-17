@@ -21,10 +21,11 @@ jobs:
         
         Write-Host "--- Finding Thanthi TV Stream ---"
         
-        # 1. Use Python to get the link (Reliable Mode)
-        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" 2>&1
+        # FIX: Added '--no-warnings' so PowerShell doesn't panic at text output
+        # We also added '2>$null' to force-silence any other non-critical errors
+        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings 2>$null
         
-        # 2. Check if we found a valid link (Starts with http)
+        # Check if we got a link
         if ($StreamUrl -match "^http") {
              Write-Host "Found Stream URL!"
              Write-Host $StreamUrl
@@ -32,8 +33,7 @@ jobs:
              Write-Host "--- Starting Capture ---"
              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
         } else {
-             Write-Error "FAILED to get Stream URL. Here is what Python said:"
-             Write-Host $StreamUrl
+             Write-Error "FAILED to get Stream URL. The variable was empty."
              exit 1
         }
 
