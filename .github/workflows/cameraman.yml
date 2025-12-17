@@ -16,22 +16,23 @@ jobs:
     - name: Get Stream & Capture
       shell: powershell
       run: |
-        Write-Host "🔍 Debugging Tools..."
+        Write-Host "--- Debugging Tools ---"
         python --version
         
-        Write-Host "🔍 Finding Thanthi TV Stream..."
+        Write-Host "--- Finding Thanthi TV Stream ---"
         
-        # FIX: We use 'python -m yt_dlp' to bypass any broken shortcut paths
+        # 1. Use Python to get the link (Reliable Mode)
         $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" 2>&1
         
-        # Check if we got a real URL or an error message
-        if ($StreamUrl -match "https") {
-             Write-Host "✅ Found Stream: $StreamUrl"
+        # 2. Check if we found a valid link (Starts with http)
+        if ($StreamUrl -match "^http") {
+             Write-Host "Found Stream URL!"
+             Write-Host $StreamUrl
              
-             Write-Host "📸 Starting Capture..."
+             Write-Host "--- Starting Capture ---"
              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
         } else {
-             Write-Error "❌ FAILED to get Stream URL. Here is what Python said:"
+             Write-Error "FAILED to get Stream URL. Here is what Python said:"
              Write-Host $StreamUrl
              exit 1
         }
