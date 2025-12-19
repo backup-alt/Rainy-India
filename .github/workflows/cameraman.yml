@@ -8,7 +8,7 @@ on:
         default: '60'
       brain_url:
         description: 'Zoho Brain URL'
-        default: 'https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/execute'
+        default: 'https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process'
 
 jobs:
   watch-news:
