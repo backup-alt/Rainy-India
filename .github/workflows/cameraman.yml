@@ -1,32 +1,11 @@
-name: News Cameraman
-
-on:
-  workflow_dispatch:
-    inputs:
-      duration:
-        description: 'How long to watch? (seconds)'
-        default: '60'
-      brain_url:
-        description: 'Zoho Brain URL'
-        default: 'https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process'
-
-jobs:
-  watch-news:
-    runs-on: self-hosted
-    steps:
-    - name: Get Stream & Capture
+- name: Upload to Brain
       shell: powershell
       run: |
-        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
-        if ($StreamUrl -match "http") {
-             ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
-        }
-
-    - name: Upload to Brain
-      shell: powershell
-      run: |
-        $ServerUrl = "${{ inputs.brain_url }}".Trim()
-        Write-Host "Target URL: $ServerUrl"
+        # 1. Grab the URL and remove any accidental leading/trailing slashes
+        $RawUrl = "${{ inputs.brain_url }}"
+        $CleanUrl = $RawUrl.Trim().TrimStart('/').TrimEnd('/')
+        
+        Write-Host "Connecting to: $CleanUrl"
         
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
@@ -36,13 +15,11 @@ jobs:
             $Body = @{ image = $Base64Image } | ConvertTo-Json
             
             try {
-                $Response = Invoke-WebRequest -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json" -UseBasicParsing
-                Write-Host "Success: $($Response.Content)"
+                # Use Invoke-RestMethod for cleaner JSON handling
+                $Response = Invoke-RestMethod -Method Post -Uri $CleanUrl -Body $Body -ContentType "application/json"
+                Write-Host "Success! Brain Responded: $($Response | ConvertTo-Json -Compress)"
             } catch {
-                $ErrorBody = $_.Exception.Response.GetResponseStream()
-                $Reader = New-Object System.IO.StreamReader($ErrorBody)
-                $Details = $Reader.ReadToEnd()
-                Write-Host "Upload Failed. Server said: $Details"
+                Write-Error "Upload Failed: $_"
                 exit 1
             }
         }
