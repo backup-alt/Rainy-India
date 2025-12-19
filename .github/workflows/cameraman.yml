@@ -1,29 +1,27 @@
 - name: Upload to Brain
       shell: powershell
       run: |
-        # 1. Clean the URL: Removes any leading or trailing slashes automatically
-        $RawUrl = "${{ inputs.brain_url }}"
-        $CleanUrl = $RawUrl.Trim().TrimStart('/').TrimEnd('/')
+        # We define the URL clearly here to avoid the /https:/ error
+        $TargetUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process"
         
-        Write-Host "Connecting to: $CleanUrl"
+        Write-Host "Connecting to: $TargetUrl"
         
-        # 2. Find the first screenshot
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
-            Write-Host "Processing: $($Image.Name)"
+            Write-Host "Sending image: $($Image.Name)"
             $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
             $Base64Image = [System.Convert]::ToBase64String($Bytes)
             $Body = @{ image = $Base64Image } | ConvertTo-Json
             
             try {
-                # 3. Use Invoke-RestMethod for native JSON communication
-                $Response = Invoke-RestMethod -Method Post -Uri $CleanUrl -Body $Body -ContentType "application/json"
-                Write-Host "Success! Brain Responded: $($Response | ConvertTo-Json -Compress)"
+                $Response = Invoke-RestMethod -Method Post -Uri $TargetUrl -Body $Body -ContentType "application/json"
+                Write-Host "Success! Brain found text: $($Response.text)"
             } catch {
-                Write-Error "Upload Failed. Check if the URL is correct and the Brain is deployed: $_"
+                # This will show us the EXACT server error if it fails again
+                $ErrorMessage = $_.Exception.Response.GetResponseStream()
+                $Reader = New-Object System.IO.StreamReader($ErrorMessage)
+                Write-Error "Server Response: $($Reader.ReadToEnd())"
                 exit 1
             }
-        } else {
-            Write-Warning "No screenshots found to upload."
         }
