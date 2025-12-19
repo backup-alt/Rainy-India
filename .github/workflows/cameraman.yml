@@ -13,57 +13,36 @@ on:
 jobs:
   watch-news:
     runs-on: self-hosted
-    timeout-minutes: 360
-
     steps:
     - name: Get Stream & Capture
       shell: powershell
       run: |
-        Write-Host "--- Finding Thanthi TV Stream ---"
         $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
-        
         if ($StreamUrl -match "http") {
-             Write-Host "Stream Found!"
              ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
-        } else {
-             Write-Error "FAILED to get Stream URL."
-             exit 1
         }
 
     - name: Upload to Brain
       shell: powershell
       run: |
-        Write-Host "--- Encoding and Sending Evidence ---"
-        $ServerUrl = "${{ inputs.brain_url }}"
+        $ServerUrl = "${{ inputs.brain_url }}".Trim()
+        Write-Host "Target URL: $ServerUrl"
+        
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
-            Write-Host "Processing image: $($Image.Name)"
-            
-            # 1. Convert Image to Base64 string
             $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
             $Base64Image = [System.Convert]::ToBase64String($Bytes)
-            
-            # 2. Create JSON Body
             $Body = @{ image = $Base64Image } | ConvertTo-Json
             
-            # 3. Send to Zoho
-            Write-Host "Sending to Zoho..."
             try {
-                $Response = Invoke-RestMethod -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json"
-                $RespText = $Response | ConvertTo-Json -Compress
-                Write-Host "Response received: $RespText"
+                $Response = Invoke-WebRequest -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json" -UseBasicParsing
+                Write-Host "Success: $($Response.Content)"
             } catch {
-                Write-Error "Upload Failed: $_"
+                $ErrorBody = $_.Exception.Response.GetResponseStream()
+                $Reader = New-Object System.IO.StreamReader($ErrorBody)
+                $Details = $Reader.ReadToEnd()
+                Write-Host "Upload Failed. Server said: $Details"
                 exit 1
             }
-        } else {
-            Write-Host "No screenshots found."
         }
-
-    - name: Backup Evidence
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: thanthi-tv-evidence
-        path: "*.jpg"
