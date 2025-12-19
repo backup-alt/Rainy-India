@@ -1,25 +1,29 @@
 - name: Upload to Brain
       shell: powershell
       run: |
-        # 1. Grab the URL and remove any accidental leading/trailing slashes
+        # 1. Clean the URL: Removes any leading or trailing slashes automatically
         $RawUrl = "${{ inputs.brain_url }}"
         $CleanUrl = $RawUrl.Trim().TrimStart('/').TrimEnd('/')
         
         Write-Host "Connecting to: $CleanUrl"
         
+        # 2. Find the first screenshot
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
+            Write-Host "Processing: $($Image.Name)"
             $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
             $Base64Image = [System.Convert]::ToBase64String($Bytes)
             $Body = @{ image = $Base64Image } | ConvertTo-Json
             
             try {
-                # Use Invoke-RestMethod for cleaner JSON handling
+                # 3. Use Invoke-RestMethod for native JSON communication
                 $Response = Invoke-RestMethod -Method Post -Uri $CleanUrl -Body $Body -ContentType "application/json"
                 Write-Host "Success! Brain Responded: $($Response | ConvertTo-Json -Compress)"
             } catch {
-                Write-Error "Upload Failed: $_"
+                Write-Error "Upload Failed. Check if the URL is correct and the Brain is deployed: $_"
                 exit 1
             }
+        } else {
+            Write-Warning "No screenshots found to upload."
         }
