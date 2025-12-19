@@ -1,27 +1,46 @@
-- name: Upload to Brain
+name: News Cameraman
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'How long to watch? (seconds)'
+        default: '20'
+
+jobs:
+  watch-news:
+    runs-on: self-hosted
+    steps:
+    - name: Get Stream & Capture
       shell: powershell
       run: |
-        # We define the URL clearly here to avoid the /https:/ error
+        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
+        if ($StreamUrl -match "http") {
+             ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+        }
+
+    - name: Upload to Brain
+      shell: powershell
+      run: |
+        # HARD-CODED URL: No more input typos possible
         $TargetUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process"
-        
-        Write-Host "Connecting to: $TargetUrl"
         
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
-            Write-Host "Sending image: $($Image.Name)"
+            Write-Host "Sending image to: $TargetUrl"
             $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
             $Base64Image = [System.Convert]::ToBase64String($Bytes)
             $Body = @{ image = $Base64Image } | ConvertTo-Json
             
             try {
                 $Response = Invoke-RestMethod -Method Post -Uri $TargetUrl -Body $Body -ContentType "application/json"
-                Write-Host "Success! Brain found text: $($Response.text)"
+                Write-Host "✅ Brain Response: $($Response.text)"
             } catch {
-                # This will show us the EXACT server error if it fails again
-                $ErrorMessage = $_.Exception.Response.GetResponseStream()
-                $Reader = New-Object System.IO.StreamReader($ErrorMessage)
-                Write-Error "Server Response: $($Reader.ReadToEnd())"
+                # This grabs the actual error from Zoho if it fails
+                $Stream = $_.Exception.Response.GetResponseStream()
+                $Reader = New-Object System.IO.StreamReader($Stream)
+                Write-Error "Server Error: $($Reader.ReadToEnd())"
                 exit 1
             }
         }
