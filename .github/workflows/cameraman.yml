@@ -1,16 +1,54 @@
-- name: Upload to Brain (JSON Mode)
+name: News Cameraman (Self-Hosted Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'How long to watch? (seconds)'
+        default: '60'
+      brain_url:
+        description: 'Zoho Brain URL'
+        default: 'https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/execute'
+
+jobs:
+  watch-news:
+    runs-on: self-hosted
+    timeout-minutes: 360
+
+    steps:
+    - name: Get Stream & Capture
+      shell: powershell
+      run: |
+        Write-Host "--- Finding Thanthi TV Stream ---"
+        
+        # 1. Get the link silently
+        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings 2>$null
+        
+        # 2. Check if we have a valid link
+        if ($StreamUrl -match "^http") {
+             Write-Host "✅ Found Stream!"
+             Write-Host "--- Starting Capture ---"
+             
+             # Capture 1 frame every 5 seconds
+             ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+        } else {
+             Write-Error "❌ FAILED to get Stream URL."
+             exit 1
+        }
+
+    - name: Upload to Brain (JSON Mode)
       shell: powershell
       run: |
         Write-Host "--- Encoding & Sending Evidence ---"
         $ServerUrl = "${{ inputs.brain_url }}"
         
-        # Get the first screenshot found
+        # Get the first screenshot found to test
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
             Write-Host "🚀 Processing $($Image.Name)..."
             
-            # Use Python to handle the complex JSON/Base64 sending
+            # Use Python to handle the JSON/Base64 sending reliably
             python -c "
 import requests
 import base64
@@ -42,3 +80,10 @@ except Exception as e:
         } else {
             Write-Warning "⚠️ No screenshots found to upload."
         }
+
+    - name: Backup Evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: thanthi-tv-evidence
+        path: "*.jpg"
