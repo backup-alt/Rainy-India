@@ -22,23 +22,23 @@ jobs:
         Write-Host "--- Finding Thanthi TV Stream ---"
         $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
         
-        if ($StreamUrl -match "^http") {
-             Write-Host "✅ Found Stream!"
+        if ($StreamUrl -match "http") {
+             Write-Host "Stream Found!"
              ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
         } else {
-             Write-Error "❌ FAILED to get Stream URL."
+             Write-Error "FAILED to get Stream URL."
              exit 1
         }
 
     - name: Upload to Brain
       shell: powershell
       run: |
-        Write-Host "--- Encoding & Sending Evidence ---"
+        Write-Host "--- Encoding and Sending Evidence ---"
         $ServerUrl = "${{ inputs.brain_url }}"
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
-            Write-Host "🚀 Processing $($Image.Name)..."
+            Write-Host "Processing image: $($Image.Name)"
             
             # 1. Convert Image to Base64 string
             $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
@@ -48,16 +48,17 @@ jobs:
             $Body = @{ image = $Base64Image } | ConvertTo-Json
             
             # 3. Send to Zoho
-            Write-Host "📡 Sending to Zoho..."
+            Write-Host "Sending to Zoho..."
             try {
                 $Response = Invoke-RestMethod -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json"
-                Write-Host "✅ Response: $($Response | ConvertTo-Json -Compress)"
+                $RespText = $Response | ConvertTo-Json -Compress
+                Write-Host "Response received: $RespText"
             } catch {
-                Write-Error "❌ Upload Failed: $_"
+                Write-Error "Upload Failed: $_"
                 exit 1
             }
         } else {
-            Write-Warning "⚠️ No screenshots found."
+            Write-Host "No screenshots found."
         }
 
     - name: Backup Evidence
