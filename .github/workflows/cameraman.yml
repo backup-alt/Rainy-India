@@ -1,11 +1,7 @@
-name: News Cameraman (Signal Version)
+name: News Bot Live (Signal Version)
 
 on:
   workflow_dispatch:
-    inputs:
-      duration:
-        description: 'Watch duration (seconds)'
-        default: '20'
 
 jobs:
   capture-and-signal:
@@ -14,28 +10,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Capture News Ticker
+      - name: Capture Tamil Ticker
         shell: powershell
         run: |
+          # 1. Get the Live Stream URL
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
-          if ($StreamUrl -match "http") {
-               ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
-          }
-
+          
+          # 2. Capture and Crop exactly where the Tamil ticker is (bottom area)
+          ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -t 5 -q:v 2 live_news.jpg
+          
       - name: Trigger Signal
         shell: powershell
         run: |
-          # PASTE YOUR REST API URL FROM STEP 1 BELOW
           $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
           
-          $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
+          $Image = Get-Item "live_news.jpg"
           if ($Image) {
+              # Convert image to Base64 to send into Zoho
               $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
               $Base64 = [System.Convert]::ToBase64String($Bytes)
               
-              # Signals REQUIRE this exact structure: { "data": { ... } }
               $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
               
-              Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-              Write-Host "✅ Signal sent! Brain is working in the background."
+              $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
+              Write-Host "✅ Image Sent! Check your email in 60 seconds."
           }
