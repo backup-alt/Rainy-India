@@ -1,4 +1,4 @@
-name: News Cameraman (Self-Hosted Windows)
+name: News Cameraman
 
 on:
   workflow_dispatch:
@@ -20,65 +20,44 @@ jobs:
       shell: powershell
       run: |
         Write-Host "--- Finding Thanthi TV Stream ---"
+        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
         
-        # 1. Get the link silently
-        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings 2>$null
-        
-        # 2. Check if we have a valid link
         if ($StreamUrl -match "^http") {
              Write-Host "✅ Found Stream!"
-             Write-Host "--- Starting Capture ---"
-             
-             # Capture 1 frame every 5 seconds
              ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
         } else {
              Write-Error "❌ FAILED to get Stream URL."
              exit 1
         }
 
-    - name: Upload to Brain (JSON Mode)
+    - name: Upload to Brain
       shell: powershell
       run: |
         Write-Host "--- Encoding & Sending Evidence ---"
         $ServerUrl = "${{ inputs.brain_url }}"
-        
-        # Get the first screenshot found to test
         $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
         
         if ($Image) {
             Write-Host "🚀 Processing $($Image.Name)..."
             
-            # Use Python to handle the JSON/Base64 sending reliably
-            python -c "
-import requests
-import base64
-import json
-import sys
-
-try:
-    # 1. Read image and convert to Base64
-    with open('$($Image.Name)', 'rb') as img_file:
-        b64_string = base64.b64encode(img_file.read()).decode('utf-8')
-
-    # 2. Prepare JSON payload
-    payload = {'image': b64_string}
-    headers = {'Content-Type': 'application/json'}
-
-    print('📡 Sending to Zoho...')
-    response = requests.post('$ServerUrl', json=payload, headers=headers)
-
-    print('✅ Response Code:', response.status_code)
-    print('✅ Response Body:', response.text)
-
-    if response.status_code != 200:
-        sys.exit(1)
-
-except Exception as e:
-    print('❌ Error:', str(e))
-    sys.exit(1)
-"
+            # 1. Convert Image to Base64 string
+            $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
+            $Base64Image = [System.Convert]::ToBase64String($Bytes)
+            
+            # 2. Create JSON Body
+            $Body = @{ image = $Base64Image } | ConvertTo-Json
+            
+            # 3. Send to Zoho
+            Write-Host "📡 Sending to Zoho..."
+            try {
+                $Response = Invoke-RestMethod -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json"
+                Write-Host "✅ Response: $($Response | ConvertTo-Json -Compress)"
+            } catch {
+                Write-Error "❌ Upload Failed: $_"
+                exit 1
+            }
         } else {
-            Write-Warning "⚠️ No screenshots found to upload."
+            Write-Warning "⚠️ No screenshots found."
         }
 
     - name: Backup Evidence
