@@ -9,38 +9,61 @@ on:
 
 jobs:
   watch-news:
+    # IMPORTANT: Keep this as self-hosted if your local PC is the runner
     runs-on: self-hosted
+    
     steps:
-    - name: Get Stream & Capture
-      shell: powershell
-      run: |
-        $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
-        if ($StreamUrl -match "http") {
-             ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
-        }
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Upload to Brain
-      shell: powershell
-      run: |
-        # HARD-CODED URL: No more input typos possible
-        $TargetUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process"
-        
-        $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
-        
-        if ($Image) {
-            Write-Host "Sending image to: $TargetUrl"
-            $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
-            $Base64Image = [System.Convert]::ToBase64String($Bytes)
-            $Body = @{ image = $Base64Image } | ConvertTo-Json
-            
-            try {
-                $Response = Invoke-RestMethod -Method Post -Uri $TargetUrl -Body $Body -ContentType "application/json"
-                Write-Host "✅ Brain Response: $($Response.text)"
-            } catch {
-                # This grabs the actual error from Zoho if it fails
-                $Stream = $_.Exception.Response.GetResponseStream()
-                $Reader = New-Object System.IO.StreamReader($Stream)
-                Write-Error "Server Error: $($Reader.ReadToEnd())"
-                exit 1
-            }
-        }
+      - name: Get Stream & Capture
+        shell: powershell
+        run: |
+          # Fetch the live stream URL from YouTube
+          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
+          
+          if ($StreamUrl -match "http") {
+               Write-Host "Stream Found. Capturing for ${{ inputs.duration }} seconds..."
+               # Capture frames: 1 frame every 5 seconds (fps=0.2), crop for news ticker
+               ffmpeg -i "$StreamUrl" -vf "fps=0.2,scale=854:480,crop=854:120:0:360" -t ${{ inputs.duration }} -q:v 5 screenshot_%04d.jpg
+          } else {
+               Write-Error "Could not find live stream URL."
+               exit 1
+          }
+
+      - name: Upload to Brain
+        shell: powershell
+        run: |
+          # The clean, hard-coded URL for your API Gateway
+          $TargetUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process"
+          
+          Write-Host "Connecting to: $TargetUrl"
+          
+          # Find the first screenshot captured by FFmpeg
+          $Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1
+          
+          if ($Image) {
+              Write-Host "Sending image: $($Image.Name)"
+              
+              # Convert image to Base64
+              $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
+              $Base64Image = [System.Convert]::ToBase64String($Bytes)
+              
+              # Build JSON body
+              $Body = @{ image = $Base64Image } | ConvertTo-Json
+              
+              try {
+                  # Send POST request to Zoho Brain
+                  $Response = Invoke-RestMethod -Method Post -Uri $TargetUrl -Body $Body -ContentType "application/json"
+                  Write-Host "✅ Success! Brain found text: $($Response.text)"
+              } catch {
+                  # Display the exact error from the server if it fails
+                  $Stream = $_.Exception.Response.GetResponseStream()
+                  $Reader = New-Object System.IO.StreamReader($Stream)
+                  Write-Error "Server Response: $($Reader.ReadToEnd())"
+                  exit 1
+              }
+          } else {
+              Write-Error "No screenshots found to upload."
+              exit 1
+          }
