@@ -49,3 +49,8 @@ jobs:
                   $_.Exception.Response.GetResponseStream() | ForEach-Object { (New-Object System.IO.StreamReader($_)).ReadToEnd() }
               }
           }
+      - name: Upload Capture for Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-screenshot
+          path: live_news.jpg
