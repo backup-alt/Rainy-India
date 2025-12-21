@@ -39,7 +39,8 @@ jobs:
               Write-Host "✅ Connected to Live TV Stream."
               # fps=0.4 results in 1 frame every 2.5 seconds
               # Crop is set to catch the bottom news ticker area
-              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=1280:720,crop=1280:150:0:550" -t $Duration -q:v 2 screenshot_%03d.jpg
+              # We scale down to 800px width and increase compression (q:v 5) to stay under the 64KB payload limit
+              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
               Write-Host "✅ Capture complete."
           } else {
               Write-Error "❌ Could not find an active TV broadcast."
@@ -75,3 +76,23 @@ jobs:
         with:
           name: live-tv-screenshots
           path: screenshot_*.jpg
+
+      - name: Discover and Capture TV Stream
+        shell: powershell
+        run: |
+          $Duration = "${{ github.event.inputs.duration }}"
+          Remove-Item "screenshot_*.jpg" -ErrorAction SilentlyContinue
+          
+          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
+          
+          if ($StreamUrl -match "vgv7lpjg6bs") {
+              $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:Thanthi TV LIVE HD news" --no-warnings
+          }
+
+          if ($StreamUrl) {
+              # Optimized for 64KB Signal Limit:
+              # - scale=800: downscales from 1280 to 800
+              # - q:v 5: increases compression slightly
+              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
+              Write-Host "✅ Optimized captures created."
+          }
