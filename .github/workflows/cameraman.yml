@@ -1,7 +1,18 @@
-name: News Bot Live (Full Pipeline)
+name: News Bot Live (Scheduled & Manual)
 
 on:
+  # 1. This adds the "Ask for Duration" popup before starting
   workflow_dispatch:
+    inputs:
+      duration:
+        description: 'How many seconds to capture? (e.g., 10, 20, 30)'
+        required: true
+        default: '10'
+  
+  # 2. This runs the workflow automatically at a given time
+  # Format is: Minute Hour Day Month DayOfWeek (UTC Time)
+  schedule:
+    - cron: '30 5 * * *' # Example: Runs every day at 5:30 AM UTC (11:00 AM IST)
 
 jobs:
   capture-and-signal:
@@ -13,50 +24,46 @@ jobs:
       - name: Capture Tamil News Ticker
         shell: powershell
         run: |
+          # Use the input duration from the popup, or default to 10 for scheduled runs
+          $Duration = "${{ github.event.inputs.duration }}"
+          if (-not $Duration) { $Duration = "10" }
+
+          Write-Host "🎬 Capturing for $Duration seconds..."
+
           # 1. Get the Live Stream URL
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
           
-          # 2. Capture and Overwrite a single file for 5 seconds to ensure stability
-          # This crops the bottom area where the Tamil news ticker resides
+          # 2. Capture and Overwrite
           if ($StreamUrl) {
-              ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -update 1 -t 5 -q:v 2 live_news.jpg
+              # We use the $Duration variable for the -t (time) flag
+              ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -update 1 -t $Duration -q:v 2 live_news.jpg
               Write-Host "✅ Screenshot captured successfully."
           } else {
-              Write-Error "❌ Could not fetch stream URL from YouTube."
+              Write-Error "❌ Could not fetch stream URL."
               exit 1
           }
 
       - name: Trigger Zoho Signal
         shell: powershell
         run: |
-          # REPLACE the URL below if yours has changed
           $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
           
           if (Test-Path "live_news.jpg") {
-              # Convert image to Base64
               $Bytes = [System.IO.File]::ReadAllBytes("live_news.jpg")
               $Base64 = [System.Convert]::ToBase64String($Bytes)
-              
-              # Construct the payload Zoho expects based on your Manual Schema
               $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
               
               try {
                   $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Write-Host "✅ Success! Zoho Signal Received: $Response"
+                  Write-Host "✅ Success! Zoho Signal Received."
               } catch {
-                  Write-Host "❌ Zoho rejected the request. Details below:"
-                  # This specific block reads the 400 Bad Request error reason from Zoho
                   $Reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                  $ErrorBody = $Reader.ReadToEnd()
-                  Write-Host "Zoho Error Message: $ErrorBody"
+                  Write-Host "❌ Zoho Error: $($Reader.ReadToEnd())"
                   exit 1
               }
-          } else {
-              Write-Error "❌ live_news.jpg not found! Capture step might have failed."
-              exit 1
           }
 
-      - name: Upload Screenshot for Download
+      - name: Upload Screenshot
         uses: actions/upload-artifact@v4
         with:
           name: live-news-capture
