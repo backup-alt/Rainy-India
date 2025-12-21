@@ -16,8 +16,11 @@ jobs:
           # 1. Get the Live Stream URL
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
           
-          # 2. Capture and Crop exactly where the Tamil ticker is (bottom area)
-          ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -t 5 -q:v 2 live_news.jpg
+          if ($StreamUrl) {
+              ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -update 1 -t 5 -q:v 2 live_news.jpg
+          } else {
+              Write-Error "Could not fetch stream URL"
+          }
           
       - name: Trigger Signal
         shell: powershell
