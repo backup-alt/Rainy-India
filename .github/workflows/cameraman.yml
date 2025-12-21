@@ -1,4 +1,4 @@
-name: India News Monitor (Safe JSON Parallel)
+name: India News Monitor (JSON Final)
 
 on:
   workflow_dispatch:
@@ -11,19 +11,21 @@ jobs:
   setup:
     runs-on: self-hosted
     outputs:
-      # We send the raw JSON array here
+      # This MUST be a single line of clean JSON
       channels: ${{ steps.set-matrix.outputs.channels }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Load and Sanitize JSON
+      - name: Load Registry
         id: set-matrix
         shell: powershell
         run: |
-          # 1. Read and ensure it is a clean, single-line JSON array
-          $content = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
-          # 2. Output as a clean string
-          echo "channels=$content" >> $env:GITHUB_OUTPUT
+          # 1. Load the JSON file
+          $raw = Get-Content "channels.json" -Raw | ConvertFrom-Json
+          # 2. Compress it into a one-liner with NO spaces
+          $json = $raw | ConvertTo-Json -Compress
+          # 3. Use the safest output method for Windows Runners
+          "channels=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
   monitor:
     needs: setup
@@ -32,28 +34,25 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        # THE FIX: We define one 'dummy' key to keep the YAML parser happy
-        # Then we 'include' your real channels from the JSON
-        channel_group: [news]
+        # THE FIX: This structure prevents the 'mapping' error
         include: ${{ fromJson(needs.setup.outputs.channels) }}
 
     steps:
       - name: Parallel Capture
         shell: powershell
         run: |
-          # The 'include' method puts keys (name, id) directly into the matrix
+          # With 'include', variables are accessed directly
           $Name = "${{ matrix.name }}"
           $ID = "${{ matrix.id }}"
           $WorkDir = "D:\hoilday\rain\work_$Name"
           
-          # Workspace Isolation: Critical for your 2 runners
           if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
           New-Item -ItemType Directory -Path $WorkDir -Force
           Set-Location $WorkDir
 
           Write-Host "--- Monitoring $Name ---"
 
-          # Use direct ID to bypass random search
+          # Use direct ID
           $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
           if ($Url) {
               ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
@@ -65,3 +64,4 @@ jobs:
         with:
           name: captures-${{ matrix.name }}
           path: "D:/hoilday/rain/${{ matrix.name }}.zip"
+          retention-days: 1
