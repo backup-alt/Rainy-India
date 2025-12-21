@@ -1,12 +1,12 @@
-name: News Bot Live (Multi-Capture)
+name: News Bot Live (Multi-Capture TV)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Total duration to watch (seconds)'
+        description: 'Total duration to watch the TV (seconds)'
         required: true
-        default: '10'
+        default: '20'
 
 jobs:
   capture-and-signal:
@@ -15,25 +15,38 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Capture Tamil News Every 2.5s
+      - name: Discover and Capture TV Stream
         shell: powershell
         run: |
           $Duration = "${{ github.event.inputs.duration }}"
           
-          # 1. Get the Live Stream URL
+          # 1. Cleanup old files
+          Remove-Item "screenshot_*.jpg" -ErrorAction SilentlyContinue
+          
+          Write-Host "Searching for the active Thanthi TV broadcast..."
+          
+          # 2. Smart Discovery Logic
+          # First, try the default live endpoint
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
           
+          # If it picks up the 'Bermuda/Secret' video (vgv7lpjg6bs) or other features, search for the HD News Feed
+          if ($StreamUrl -match "vgv7lpjg6bs" -or $null -eq $StreamUrl) {
+              Write-Host "Default link redirected to a documentary. Searching for LIVE HD News feed..."
+              $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:Thanthi TV LIVE HD news" --no-warnings
+          }
+
           if ($StreamUrl) {
-              # fps=0.4 means 1 frame every 2.5 seconds
-              # %03d creates a sequence: screenshot_001.jpg, screenshot_002.jpg...
+              Write-Host "✅ Connected to Live TV Stream."
+              # fps=0.4 results in 1 frame every 2.5 seconds
+              # Crop is set to catch the bottom news ticker area
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=1280:720,crop=1280:150:0:550" -t $Duration -q:v 2 screenshot_%03d.jpg
-              Write-Host "✅ Captured multiple screenshots."
+              Write-Host "✅ Capture complete."
           } else {
-              Write-Error "❌ Could not fetch stream URL."
+              Write-Error "❌ Could not find an active TV broadcast."
               exit 1
           }
 
-      - name: Trigger Zoho Signal for Each Image
+      - name: Trigger Zoho Signals
         shell: powershell
         run: |
           $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
@@ -41,33 +54,33 @@ jobs:
           $Images = Get-ChildItem "screenshot_*.jpg"
           
           if ($null -eq $Images) {
-              Write-Host "No screenshots found to send."
+              Write-Host "No screenshots found."
               exit 0
           }
 
           foreach ($Img in $Images) {
-              Write-Host "Sending image: $($Img.Name)"
+              Write-Host "Sending: $($Img.Name)"
               
               try {
                   $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
                   $Base64 = [System.Convert]::ToBase64String($Bytes)
                   
-                  # Simple payload structure
                   $Payload = @{ data = @{ image = $Base64 } }
                   $Body = $Payload | ConvertTo-Json -Depth 20
                   
+                  # Send to Zoho
                   $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Write-Host "Success: $($Img.Name) was processed."
+                  Write-Host "Success: $($Img.Name) processed by Zoho."
               } catch {
                   Write-Host "Error sending $($Img.Name): $($_.Exception.Message)"
               }
               
-              # Wait 1.5 seconds between images to prevent rate limiting
-              Start-Sleep -Seconds 1.5
+              # Small delay to ensure Zoho processes signals in order
+              Start-Sleep -Seconds 2
           }
 
-      - name: Upload All Screenshots
+      - name: Upload Captures to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: news-captures-collection
+          name: live-tv-screenshots
           path: screenshot_*.jpg
