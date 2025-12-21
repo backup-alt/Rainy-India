@@ -19,7 +19,6 @@ jobs:
         id: set-matrix
         shell: powershell
         run: |
-          # Read JSON and compress it for the matrix output
           $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
           echo "matrix=$json" >> $env:GITHUB_OUTPUT
 
@@ -30,56 +29,55 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        # Syntax Fix: Ensure 'channel' is the only child of matrix here
+        # Each channel object from the JSON is assigned here
         channel: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
-      - name: Capture and Upload
+      - name: Create Isolated Channel Folder
         shell: powershell
         run: |
-          # 1. ISOLATE WORKSPACE: Avoid local file/temp conflicts
-          $Name = "${{ matrix.channel.name }}"
+          # This solves your 'temp folder' and '.exe' conflict error
+          $DirName = "monitor_${{ matrix.channel.name }}"
+          if (!(Test-Path $DirName)) { New-Item -ItemType Directory -Path $DirName }
+          echo "CHANNEL_DIR=$DirName" >> $env:GITHUB_ENV
+
+      - name: Capture Ticker
+        shell: powershell
+        working-directory: ${{ env.CHANNEL_DIR }}
+        run: |
           $VideoID = "${{ matrix.channel.id }}"
-          $WorkDir = "monitor_$Name"
+          $ChannelName = "${{ matrix.channel.name }}"
           
-          # Clean up any existing folder from a previous crash
-          if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
-          New-Item -ItemType Directory -Path $WorkDir -Force
-          Set-Location $WorkDir
-
-          Write-Host "Monitoring $Name (ID: $VideoID)"
-
-          # 2. RESOLVE AND CAPTURE
-          # Uses the direct ID from your channels.json to avoid random videos
+          Write-Host "Monitoring $ChannelName via Direct ID: $VideoID"
+          
+          # 1. Resolve Stream (Direct ID bypasses random video discovery)
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$VideoID" --no-warnings
 
           if ($StreamUrl) {
-              # Capture frames directly into the isolated folder
+              # 2. Capture Frames (fps=0.4 is 1 frame every 2.5s)
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
               
-              # 3. ZOHO SIGNAL
+              # 3. Zoho Signal
               $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
               $Images = Get-ChildItem "shot_*.jpg"
 
               foreach ($Img in $Images) {
                   $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
                   $Base64 = [System.Convert]::ToBase64String($Bytes)
-                  $Body = @{ data = @{ image = $Base64; channel = $Name } } | ConvertTo-Json
+                  $Body = @{ data = @{ image = $Base64; channel = $ChannelName } } | ConvertTo-Json
                   Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
                   Start-Sleep -Seconds 2
               }
 
-              # 4. ZIP THE FILES
-              # Moves the zip to the root level so the next step can find it
-              Compress-Archive -Path "shot_*.jpg" -DestinationPath "../$Name.zip" -Force
+              # 4. ZIP (Saves as a normal file in the channel folder)
+              Compress-Archive -Path "shot_*.jpg" -DestinationPath "$ChannelName.zip" -Force
           } else {
-              Write-Error "Could not resolve stream for ID: $VideoID"
+              Write-Error "Failed to resolve ID: $VideoID"
           }
 
       - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Creates a standard, unique downloadable zip for each channel
           name: ${{ matrix.channel.name }}-Captures
-          path: "${{ matrix.channel.name }}.zip"
+          path: "monitor_${{ matrix.channel.name }}/${{ matrix.channel.name }}.zip"
           retention-days: 1
