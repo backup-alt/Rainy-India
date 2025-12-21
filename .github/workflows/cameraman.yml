@@ -1,4 +1,4 @@
-name: India News Monitor (JSON Fixed)
+name: India News Monitor (Full JSON Sync)
 
 on:
   workflow_dispatch:
@@ -11,19 +11,23 @@ jobs:
   setup:
     runs-on: self-hosted
     outputs:
-      # Explicitly naming the output
-      channels: ${{ steps.set-matrix.outputs.channels }}
+      # This will now contain the entire matrix structure
+      matrix_data: ${{ steps.set-matrix.outputs.matrix_data }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Load Registry
+      - name: Create Dynamic Matrix
         id: set-matrix
         shell: powershell
         run: |
-          # Compress to a one-liner to avoid any 'mapping' issues in YAML
-          $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
-          # Use a clean variable name
-          echo "channels=$json" >> $env:GITHUB_OUTPUT
+          # 1. Load your channels from the JSON file
+          $channels = Get-Content "channels.json" -Raw | ConvertFrom-Json
+          
+          # 2. WRAP the channels in an 'include' key (This fixes the YAML error)
+          $matrix = @{ include = $channels } | ConvertTo-Json -Compress
+          
+          # 3. Output the single string
+          echo "matrix_data=$matrix" >> $env:GITHUB_OUTPUT
 
   monitor:
     needs: setup
@@ -31,33 +35,37 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix:
-        # Use the explicit output name from the setup job
-        include: ${{ fromJson(needs.setup.outputs.channels) }}
+      # THE FIX: Direct assignment. No 'include' or 'channel' keys here.
+      matrix: ${{ fromJson(needs.setup.outputs.matrix_data) }}
 
     steps:
-      - name: Parallel Capture
+      - name: Capture Ticker
         shell: powershell
         run: |
-          # In 'include' mode, variables are accessed directly by key name
+          # The keys (name, id) are now directly available in the matrix context
           $Name = "${{ matrix.name }}"
           $ID = "${{ matrix.id }}"
           $WorkDir = "D:\hoilday\rain\work_$Name"
           
+          # ISOLATE WORKSPACE: Essential for your 2 runners to work together
           if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
           New-Item -ItemType Directory -Path $WorkDir -Force
           Set-Location $WorkDir
 
-          Write-Host "--- Monitoring $Name ---"
+          Write-Host "--- Monitoring $Name via ID $ID ---"
 
+          # Use direct ID to bypass random video search
           $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
           if ($Url) {
               ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
+              
+              # ZIP (Stored in root for easy upload)
               Compress-Archive -Path "shot_*.jpg" -DestinationPath "D:\hoilday\rain\$Name.zip" -Force
           }
 
-      - name: Upload Zip
+      - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
           name: captures-${{ matrix.name }}
           path: "D:/hoilday/rain/${{ matrix.name }}.zip"
+          retention-days: 1
