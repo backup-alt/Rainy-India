@@ -1,4 +1,4 @@
-name: News Bot Live (Signal Version)
+name: News Bot Live (Full Pipeline)
 
 on:
   workflow_dispatch:
@@ -7,50 +7,57 @@ jobs:
   capture-and-signal:
     runs-on: self-hosted
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Capture Tamil Ticker
+      - name: Capture Tamil News Ticker
         shell: powershell
         run: |
           # 1. Get the Live Stream URL
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
           
+          # 2. Capture and Overwrite a single file for 5 seconds to ensure stability
+          # This crops the bottom area where the Tamil news ticker resides
           if ($StreamUrl) {
               ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -update 1 -t 5 -q:v 2 live_news.jpg
+              Write-Host "✅ Screenshot captured successfully."
           } else {
-              Write-Error "Could not fetch stream URL"
+              Write-Error "❌ Could not fetch stream URL from YouTube."
+              exit 1
           }
-          
-      - name: Trigger Signal
+
+      - name: Trigger Zoho Signal
         shell: powershell
         run: |
+          # REPLACE the URL below if yours has changed
           $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
           
           if (Test-Path "live_news.jpg") {
+              # Convert image to Base64
               $Bytes = [System.IO.File]::ReadAllBytes("live_news.jpg")
               $Base64 = [System.Convert]::ToBase64String($Bytes)
               
-              # Zoho expects "data" to contain the keys defined in your schema
-              $Payload = @{
-                  data = @{
-                      image = $Base64
-                  }
-              }
-              
-              $Body = $Payload | ConvertTo-Json -Depth 20
+              # Construct the payload Zoho expects based on your Manual Schema
+              $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
               
               try {
                   $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Write-Host "✅ Signal Sent! Response: $Response"
+                  Write-Host "✅ Success! Zoho Signal Received: $Response"
               } catch {
-                  Write-Error "❌ Zoho rejected the request: $_"
-                  # This will print the actual error from Zoho to your GitHub logs
-                  $_.Exception.Response.GetResponseStream() | ForEach-Object { (New-Object System.IO.StreamReader($_)).ReadToEnd() }
+                  Write-Host "❌ Zoho rejected the request. Details below:"
+                  # This specific block reads the 400 Bad Request error reason from Zoho
+                  $Reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                  $ErrorBody = $Reader.ReadToEnd()
+                  Write-Host "Zoho Error Message: $ErrorBody"
+                  exit 1
               }
+          } else {
+              Write-Error "❌ live_news.jpg not found! Capture step might have failed."
+              exit 1
           }
-      - name: Upload Capture for Download
+
+      - name: Upload Screenshot for Download
         uses: actions/upload-artifact@v4
         with:
-          name: live-screenshot
+          name: live-news-capture
           path: live_news.jpg
