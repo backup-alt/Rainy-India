@@ -1,11 +1,10 @@
-name: India News Monitor (Final Stable)
+name: India News Monitor (Direct ID Method)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Seconds to monitor each channel'
-        required: true
+        description: 'Seconds to monitor'
         default: '15'
 
 jobs:
@@ -20,11 +19,7 @@ jobs:
         id: set-matrix
         shell: powershell
         run: |
-          if (!(Test-Path "channels.txt")) {
-              "@ThanthiTV`n@PolimerNews" | Out-File "channels.txt" -Encoding UTF8
-          }
-          $channels = Get-Content "channels.txt" | Where-Object { $_ -match "@" }
-          $json = $channels | ConvertTo-Json -Compress
+          $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
           Write-Output "matrix=$json" >> $env:GITHUB_OUTPUT
 
   monitor:
@@ -34,58 +29,51 @@ jobs:
       matrix:
         channel: ${{ fromJson(needs.setup.outputs.matrix) }}
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 3
 
     steps:
-      - name: Discover Capture and Zip
+      - name: Capture and Upload
         shell: powershell
         run: |
-          $Handle = "${{ matrix.channel }}"
-          $Duration = "${{ github.event.inputs.duration }}"
-          
-          # Use a clean name for files (remove @ and special chars)
-          $CleanHandle = $Handle.Replace('@','').Replace('.','')
-          
-          Write-Host "--- Starting discovery for $Handle ---"
-          Remove-Item "screenshot_*.jpg", "*.zip" -ErrorAction SilentlyContinue
+          # 1. CREATE UNIQUE DIRECTORY to avoid temp folder errors
+          $ChannelName = "${{ matrix.channel.name }}"
+          $VideoID = "${{ matrix.channel.id }}"
+          $WorkingDir = "work_$ChannelName"
+          New-Item -ItemType Directory -Path $WorkingDir -Force
+          Set-Location $WorkingDir
 
-          # 1. ENHANCED SEARCH: Forces local language match to avoid English news channels
-          $SearchQuery = "ytsearch1:$Handle Tamil Official Live News HD"
-          $StreamUrl = python -m yt_dlp -f best -g "$SearchQuery" --no-warnings
+          Write-Host "--- Monitoring $ChannelName (ID: $VideoID) ---"
+
+          # 2. RESOLVE DIRECT URL
+          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$VideoID" --no-warnings
 
           if ($StreamUrl) {
-              $Title = python -m yt_dlp --get-title "$SearchQuery" --no-warnings
-              Write-Host "SUCCESS: Found $Title"
+              # 3. CAPTURE (1 frame every 2.5s)
+              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
               
-              # 2. Capture (fps=0.4 is 1 frame every 2.5 seconds)
-              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
-              
+              # 4. SIGNAL TO ZOHO
               $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
-              $Images = Get-ChildItem "screenshot_*.jpg"
+              $Images = Get-ChildItem "shot_*.jpg"
 
               foreach ($Img in $Images) {
                   try {
                       $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
                       $Base64 = [System.Convert]::ToBase64String($Bytes)
-                      $Body = @{ data = @{ image = $Base64; channel = $Handle } } | ConvertTo-Json
+                      $Body = @{ data = @{ image = $Base64; channel = $ChannelName } } | ConvertTo-Json
                       Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                      Write-Host "Sent $($Img.Name)"
                   } catch { Write-Host "Signal Error" }
                   Start-Sleep -Seconds 2
               }
 
-              # 3. Zip with Unique Name
-              $ZipName = "$CleanHandle.zip"
-              Compress-Archive -Path "screenshot_*.jpg" -DestinationPath $ZipName -Force
-              Remove-Item "screenshot_*.jpg"
+              # 5. ZIP FOR ARTIFACTS
+              Compress-Archive -Path "shot_*.jpg" -DestinationPath "../$ChannelName.zip" -Force
           } else {
-              Write-Error "ERROR: Stream not found for $Handle"
+              Write-Error "Could not connect to ID: $VideoID"
           }
 
-      - name: Upload Zip Artifact
+      - name: Upload ZIP as Normal File
         uses: actions/upload-artifact@v4
         with:
-          # UNIQUE NAME: Uses the matrix channel to prevent 409 Conflict
-          name: captures-${{ matrix.channel }}
-          path: "*.zip"
+          name: ${{ matrix.channel.name }}-Captures
+          path: "${{ matrix.channel.name }}.zip"
           retention-days: 1
