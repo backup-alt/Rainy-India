@@ -1,4 +1,4 @@
-name: India News Monitor (Full JSON Sync)
+name: India News Monitor (Safe JSON Parallel)
 
 on:
   workflow_dispatch:
@@ -11,23 +11,19 @@ jobs:
   setup:
     runs-on: self-hosted
     outputs:
-      # This will now contain the entire matrix structure
-      matrix_data: ${{ steps.set-matrix.outputs.matrix_data }}
+      # We send the raw JSON array here
+      channels: ${{ steps.set-matrix.outputs.channels }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create Dynamic Matrix
+      - name: Load and Sanitize JSON
         id: set-matrix
         shell: powershell
         run: |
-          # 1. Load your channels from the JSON file
-          $channels = Get-Content "channels.json" -Raw | ConvertFrom-Json
-          
-          # 2. WRAP the channels in an 'include' key (This fixes the YAML error)
-          $matrix = @{ include = $channels } | ConvertTo-Json -Compress
-          
-          # 3. Output the single string
-          echo "matrix_data=$matrix" >> $env:GITHUB_OUTPUT
+          # 1. Read and ensure it is a clean, single-line JSON array
+          $content = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
+          # 2. Output as a clean string
+          echo "channels=$content" >> $env:GITHUB_OUTPUT
 
   monitor:
     needs: setup
@@ -35,37 +31,37 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 4
-      # THE FIX: Direct assignment. No 'include' or 'channel' keys here.
-      matrix: ${{ fromJson(needs.setup.outputs.matrix_data) }}
+      matrix:
+        # THE FIX: We define one 'dummy' key to keep the YAML parser happy
+        # Then we 'include' your real channels from the JSON
+        channel_group: [news]
+        include: ${{ fromJson(needs.setup.outputs.channels) }}
 
     steps:
-      - name: Capture Ticker
+      - name: Parallel Capture
         shell: powershell
         run: |
-          # The keys (name, id) are now directly available in the matrix context
+          # The 'include' method puts keys (name, id) directly into the matrix
           $Name = "${{ matrix.name }}"
           $ID = "${{ matrix.id }}"
           $WorkDir = "D:\hoilday\rain\work_$Name"
           
-          # ISOLATE WORKSPACE: Essential for your 2 runners to work together
+          # Workspace Isolation: Critical for your 2 runners
           if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
           New-Item -ItemType Directory -Path $WorkDir -Force
           Set-Location $WorkDir
 
-          Write-Host "--- Monitoring $Name via ID $ID ---"
+          Write-Host "--- Monitoring $Name ---"
 
-          # Use direct ID to bypass random video search
+          # Use direct ID to bypass random search
           $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
           if ($Url) {
               ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
-              
-              # ZIP (Stored in root for easy upload)
               Compress-Archive -Path "shot_*.jpg" -DestinationPath "D:\hoilday\rain\$Name.zip" -Force
           }
 
-      - name: Upload Zip Artifact
+      - name: Upload Zip
         uses: actions/upload-artifact@v4
         with:
           name: captures-${{ matrix.name }}
           path: "D:/hoilday/rain/${{ matrix.name }}.zip"
-          retention-days: 1
