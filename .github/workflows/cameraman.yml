@@ -1,71 +1,72 @@
-name: India News Monitor (Diagnostic Mode)
+name: India News Monitor (Stable Matrix)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
         description: 'Seconds'
-        default: '10'
+        default: '15'
 
 jobs:
-  setup:
-    runs-on: self-hosted
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Load and Debug JSON
-        id: set-matrix
-        shell: powershell
-        run: |
-          # 1. Read raw content
-          $RawContent = Get-Content "channels.json" -Raw
-          Write-Host "DEBUG: Raw channels.json content follows:"
-          Write-Host $RawContent
-          
-          # 2. Parse and re-compress to ensure it is clean JSON
-          $json = $RawContent | ConvertFrom-Json | ConvertTo-Json -Compress
-          
-          # 3. Output for the next job
-          echo "matrix=$json" >> $env:GITHUB_OUTPUT
-
   monitor:
-    needs: setup
     runs-on: self-hosted
     strategy:
-      # We remove fail-fast and max-parallel temporarily to simplify the block
+      fail-fast: false
+      max-parallel: 2 # Limits load on your computer
       matrix:
-        channel: ${{ fromJson(needs.setup.outputs.matrix) }}
+        # HARDCODED REGISTRY: This stops the 'mapping not expected' error
+        channel: [
+          { name: "Thanthi", id: "j1nzTy5q_1Y" },
+          { name: "Polimer", id: "Ei6NUWLQCQM" }
+        ]
 
     steps:
-      - name: Debug Matrix Data
+      - name: Capture and Zip
         shell: powershell
         run: |
-          Write-Host "DEBUG: Received Object Name: ${{ matrix.channel.name }}"
-          Write-Host "DEBUG: Received Object ID: ${{ matrix.channel.id }}"
-
-      - name: Isolated Capture
-        shell: powershell
-        run: |
+          # 1. FIX LOCAL CONFLICTS: Create a unique folder for this channel
           $Name = "${{ matrix.channel.name }}"
           $ID = "${{ matrix.channel.id }}"
-          $Dir = "diag_$Name"
+          $WorkDir = "D:\hoilday\rain\work_$Name"
           
-          # Create isolated workspace to stop .exe and temp folder errors
-          if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
-          New-Item -ItemType Directory -Path $Dir -Force
-          Set-Location $Dir
+          if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $WorkDir -Force
+          Set-Location $WorkDir
 
-          Write-Host "Processing $Name via ID: $ID"
-          
-          # Resolve stream directly
-          $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
+          Write-Host "--- Monitoring $Name via ID $ID ---"
 
-          if ($Url) {
-              ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
-              Write-Host "SUCCESS: Captured frames in $Dir"
+          # 2. RESOLVE AND CAPTURE (Direct ID bypasses random video search)
+          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
+
+          if ($StreamUrl) {
+              # Capture frames into the isolated folder
+              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
+              
+              # 3. ZOHO SIGNAL
+              $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
+              $Images = Get-ChildItem "shot_*.jpg"
+
+              foreach ($Img in $Images) {
+                  try {
+                      $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
+                      $Base64 = [System.Convert]::ToBase64String($Bytes)
+                      $Body = @{ data = @{ image = $Base64; channel = $Name } } | ConvertTo-Json
+                      Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
+                      Write-Host "Sent $($Img.Name)"
+                  } catch { Write-Host "Signal Error" }
+                  Start-Sleep -Seconds 2
+              }
+
+              # 4. ZIP AND CLEAN (Saves zip as a normal file in your runner)
+              $ZipPath = "D:\hoilday\rain\$Name.zip"
+              Compress-Archive -Path "shot_*.jpg" -DestinationPath $ZipPath -Force
+              Remove-Item "shot_*.jpg"
           } else {
-              Write-Error "FAILURE: Could not connect to ID $ID"
+              Write-Error "ERROR: Could not resolve stream for $Name"
           }
+
+      - name: Upload Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-${{ matrix.channel.name }}
+          path: "D:/hoilday/rain/${{ matrix.channel.name }}.zip"
