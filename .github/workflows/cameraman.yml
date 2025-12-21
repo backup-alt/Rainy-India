@@ -1,18 +1,12 @@
-name: News Bot Live (Scheduled & Manual)
+name: News Bot Live (Multi-Capture)
 
 on:
-  # 1. This adds the "Ask for Duration" popup before starting
   workflow_dispatch:
     inputs:
       duration:
-        description: 'How many seconds to capture? (e.g., 10, 20, 30)'
+        description: 'Total duration to watch (seconds)'
         required: true
         default: '10'
-  
-  # 2. This runs the workflow automatically at a given time
-  # Format is: Minute Hour Day Month DayOfWeek (UTC Time)
-  schedule:
-    - cron: '30 5 * * *' # Example: Runs every day at 5:30 AM UTC (11:00 AM IST)
 
 jobs:
   capture-and-signal:
@@ -21,50 +15,52 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Capture Tamil News Ticker
+      - name: Capture Tamil News Every 2.5s
         shell: powershell
         run: |
-          # Use the input duration from the popup, or default to 10 for scheduled runs
           $Duration = "${{ github.event.inputs.duration }}"
-          if (-not $Duration) { $Duration = "10" }
-
-          Write-Host "🎬 Capturing for $Duration seconds..."
-
+          
           # 1. Get the Live Stream URL
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
           
-          # 2. Capture and Overwrite
           if ($StreamUrl) {
-              # We use the $Duration variable for the -t (time) flag
-              ffmpeg -i "$StreamUrl" -vf "fps=1,scale=1280:720,crop=1280:150:0:550" -update 1 -t $Duration -q:v 2 live_news.jpg
-              Write-Host "✅ Screenshot captured successfully."
+              # fps=0.4 means 1 frame every 2.5 seconds
+              # %03d creates a sequence: screenshot_001.jpg, screenshot_002.jpg...
+              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=1280:720,crop=1280:150:0:550" -t $Duration -q:v 2 screenshot_%03d.jpg
+              Write-Host "✅ Captured multiple screenshots."
           } else {
               Write-Error "❌ Could not fetch stream URL."
               exit 1
           }
 
-      - name: Trigger Zoho Signal
+      - name: Trigger Zoho Signal for Each Image
         shell: powershell
         run: |
           $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
           
-          if (Test-Path "live_news.jpg") {
-              $Bytes = [System.IO.File]::ReadAllBytes("live_news.jpg")
+          # Find all files starting with 'screenshot_'
+          $Images = Get-ChildItem "screenshot_*.jpg"
+          
+          foreach ($Img in $Images) {
+              Write-Host "📤 Sending $($Img.Name) to Zoho..."
+              
+              $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
               $Base64 = [System.Convert]::ToBase64String($Bytes)
               $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
               
               try {
                   $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Write-Host "✅ Success! Zoho Signal Received."
+                  Write-Host "✅ $($Img.Name) sent successfully."
               } catch {
-                  $Reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                  Write-Host "❌ Zoho Error: $($Reader.ReadToEnd())"
-                  exit 1
+                  Write-Host "⚠️ Failed to send $($Img.Name)."
               }
+              
+              # Small delay to avoid overwhelming the Zoho Signal rate limit
+              Start-Sleep -Seconds 1
           }
 
-      - name: Upload Screenshot
+      - name: Upload All Screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: live-news-capture
-          path: live_news.jpg
+          name: news-captures-collection
+          path: screenshot_*.jpg
