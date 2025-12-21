@@ -1,4 +1,4 @@
-name: India News Monitor (JSON Mode)
+name: India News Monitor (JSON Parallel)
 
 on:
   workflow_dispatch:
@@ -19,19 +19,18 @@ jobs:
         id: set-matrix
         shell: powershell
         run: |
-          # 1. Read file as a raw string and compress it for GitHub
-          $content = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
-          # 2. Use the correct syntax to pass it to the next job
-          echo "matrix=$content" >> $env:GITHUB_OUTPUT
+          # Use a Safe PowerShell output method for JSON
+          $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
+          echo "matrix=$json" >> $env:GITHUB_OUTPUT
 
   monitor:
     needs: setup
     runs-on: self-hosted
     strategy:
       fail-fast: false
-      max-parallel: 2 # Adjust based on your number of active runners
+      max-parallel: 4
       matrix:
-        # 3. This correctly maps the JSON array to individual jobs
+        # THE FIX: Ensure matrix is a direct child of strategy with no intermediate keys
         channel: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
@@ -40,23 +39,27 @@ jobs:
         run: |
           $Name = "${{ matrix.channel.name }}"
           $ID = "${{ matrix.channel.id }}"
+          # ISOLATE WORKSPACE: Prevents temp/exe conflicts on your PC
           $WorkDir = "D:\hoilday\rain\work_$Name"
           
-          # Isolate workspace for parallel running
           if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
           New-Item -ItemType Directory -Path $WorkDir -Force
           Set-Location $WorkDir
 
+          Write-Host "--- Monitoring $Name ---"
+
+          # CAPTURE
           $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
           if ($Url) {
               ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
               
-              # ZIP and move to root
+              # ZIP (Stored in main folder for easy download)
               Compress-Archive -Path "shot_*.jpg" -DestinationPath "D:\hoilday\rain\$Name.zip" -Force
           }
 
-      - name: Upload Zip
+      - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
           name: captures-${{ matrix.channel.name }}
           path: "D:/hoilday/rain/${{ matrix.channel.name }}.zip"
+          retention-days: 1
