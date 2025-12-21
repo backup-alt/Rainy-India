@@ -1,11 +1,11 @@
-name: India News Monitor (Direct ID Method)
+name: India News Monitor (Diagnostic Mode)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Seconds to monitor'
-        default: '15'
+        description: 'Seconds'
+        default: '10'
 
 jobs:
   setup:
@@ -15,69 +15,57 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Load Channels
+
+      - name: Load and Debug JSON
         id: set-matrix
         shell: powershell
         run: |
-          $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
+          # 1. Read raw content
+          $RawContent = Get-Content "channels.json" -Raw
+          Write-Host "DEBUG: Raw channels.json content follows:"
+          Write-Host $RawContent
+          
+          # 2. Parse and re-compress to ensure it is clean JSON
+          $json = $RawContent | ConvertFrom-Json | ConvertTo-Json -Compress
+          
+          # 3. Output for the next job
           echo "matrix=$json" >> $env:GITHUB_OUTPUT
 
   monitor:
     needs: setup
     runs-on: self-hosted
     strategy:
-      fail-fast: false
-      max-parallel: 3
+      # We remove fail-fast and max-parallel temporarily to simplify the block
       matrix:
-        # Each channel object from the JSON is assigned here
         channel: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
-      - name: Create Isolated Channel Folder
+      - name: Debug Matrix Data
         shell: powershell
         run: |
-          # This solves your 'temp folder' and '.exe' conflict error
-          $DirName = "monitor_${{ matrix.channel.name }}"
-          if (!(Test-Path $DirName)) { New-Item -ItemType Directory -Path $DirName }
-          echo "CHANNEL_DIR=$DirName" >> $env:GITHUB_ENV
+          Write-Host "DEBUG: Received Object Name: ${{ matrix.channel.name }}"
+          Write-Host "DEBUG: Received Object ID: ${{ matrix.channel.id }}"
 
-      - name: Capture Ticker
+      - name: Isolated Capture
         shell: powershell
-        working-directory: ${{ env.CHANNEL_DIR }}
         run: |
-          $VideoID = "${{ matrix.channel.id }}"
-          $ChannelName = "${{ matrix.channel.name }}"
+          $Name = "${{ matrix.channel.name }}"
+          $ID = "${{ matrix.channel.id }}"
+          $Dir = "diag_$Name"
           
-          Write-Host "Monitoring $ChannelName via Direct ID: $VideoID"
+          # Create isolated workspace to stop .exe and temp folder errors
+          if (Test-Path $Dir) { Remove-Item $Dir -Recurse -Force }
+          New-Item -ItemType Directory -Path $Dir -Force
+          Set-Location $Dir
+
+          Write-Host "Processing $Name via ID: $ID"
           
-          # 1. Resolve Stream (Direct ID bypasses random video discovery)
-          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$VideoID" --no-warnings
+          # Resolve stream directly
+          $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
 
-          if ($StreamUrl) {
-              # 2. Capture Frames (fps=0.4 is 1 frame every 2.5s)
-              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
-              
-              # 3. Zoho Signal
-              $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
-              $Images = Get-ChildItem "shot_*.jpg"
-
-              foreach ($Img in $Images) {
-                  $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
-                  $Base64 = [System.Convert]::ToBase64String($Bytes)
-                  $Body = @{ data = @{ image = $Base64; channel = $ChannelName } } | ConvertTo-Json
-                  Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Start-Sleep -Seconds 2
-              }
-
-              # 4. ZIP (Saves as a normal file in the channel folder)
-              Compress-Archive -Path "shot_*.jpg" -DestinationPath "$ChannelName.zip" -Force
+          if ($Url) {
+              ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
+              Write-Host "SUCCESS: Captured frames in $Dir"
           } else {
-              Write-Error "Failed to resolve ID: $VideoID"
+              Write-Error "FAILURE: Could not connect to ID $ID"
           }
-
-      - name: Upload Zip Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.channel.name }}-Captures
-          path: "monitor_${{ matrix.channel.name }}/${{ matrix.channel.name }}.zip"
-          retention-days: 1
