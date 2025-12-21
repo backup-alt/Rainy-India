@@ -1,14 +1,15 @@
-name: India News Monitor (Official TV Feeds - ZIP)
+name: India News Monitor (Official TV Feeds)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Duration to monitor each channel (seconds)'
+        description: 'Seconds to monitor each channel'
         required: true
         default: '15'
 
 jobs:
+  # 1. SETUP: Reads the channel list and creates the Matrix
   setup:
     runs-on: self-hosted
     outputs:
@@ -17,43 +18,52 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       
-      - name: Load Channels from List
+      - name: Load Channels
         id: set-matrix
         shell: powershell
         run: |
+          # Create channels.txt if missing
           if (!(Test-Path "channels.txt")) {
-              "@ThanthiTV`n@PolimerNews" | Out-File "channels.txt"
+              "@ThanthiTV`n@PolimerNews" | Out-File "channels.txt" -Encoding UTF8
           }
-          $channels = Get-Content "channels.txt" | Where-Object { $_ -ne "" }
+          $channels = Get-Content "channels.txt" | Where-Object { $_ -match "@" }
           $json = $channels | ConvertTo-Json -Compress
-          echo "matrix=$json" >> $env:GITHUB_OUTPUT
+          # Important: Standard GitHub output syntax for Windows
+          Write-Output "matrix=$json" >> $env:GITHUB_OUTPUT
 
+  # 2. MONITOR: Runs parallel jobs for each channel
   monitor:
     needs: setup
     runs-on: self-hosted
     strategy:
       matrix:
         channel: ${{ fromJson(needs.setup.outputs.matrix) }}
-      max-parallel: 5
       fail-fast: false
+      max-parallel: 5
 
     steps:
-      - name: Discover and Capture Official Ticker
+      - name: Discover Capture and Zip
         shell: powershell
         run: |
           $Handle = "${{ matrix.channel }}"
           $Duration = "${{ github.event.inputs.duration }}"
           
-          Remove-Item "screenshot_*.jpg" -ErrorAction SilentlyContinue
+          Write-Host "🔍 Starting discovery for $Handle"
           
-          Write-Host "🔍 Searching for the Official TV Broadcast for $Handle..."
+          # Cleanup previous run artifacts
+          Remove-Item "screenshot_*.jpg" -ErrorAction SilentlyContinue
+          Remove-Item "*.zip" -ErrorAction SilentlyContinue
+
+          # 1. Find Official Stream via Search
           $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:$Handle official live news HD" --no-warnings
 
           if ($StreamUrl) {
-              # Capture frames
+              Write-Host "✅ Live Feed Found. Capturing ticker..."
+              
+              # 2. Capture (fps=0.4 is 1 frame every 2.5 seconds)
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
               
-              # Signal Loop to Zoho
+              # 3. Send Individual Signals to Zoho (needed for OCR)
               $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
               $Images = Get-ChildItem "screenshot_*.jpg"
 
@@ -63,19 +73,28 @@ jobs:
                       $Base64 = [System.Convert]::ToBase64String($Bytes)
                       $Body = @{ data = @{ image = $Base64; channel = $Handle } } | ConvertTo-Json
                       Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  } catch { Write-Host "⚠️ Failed to send: $($_.Exception.Message)" }
+                      Write-Host "Sent $($Img.Name)"
+                  } catch {
+                      Write-Host "⚠️ Signal Error: $($_.Exception.Message)"
+                  }
                   Start-Sleep -Seconds 2
               }
 
-              # --- NEW ZIP LOGIC ---
-              $ZipName = "$($Handle.Replace('@','')).zip"
-              Write-Host "📦 Creating ZIP archive: $ZipName"
+              # 4. Create ZIP for storage
+              $CleanName = $Handle.Replace('@','')
+              $ZipName = "$CleanName.zip"
+              Write-Host "📦 Archiving captures to $ZipName"
               Compress-Archive -Path "screenshot_*.jpg" -DestinationPath $ZipName -Force
+              
+              # Optional: Cleanup raw images after zipping to save disk space
+              Remove-Item "screenshot_*.jpg"
+          } else {
+              Write-Error "❌ Stream not found for $Handle"
           }
 
-      - name: Upload Channel ZIP to GitHub
+      - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          # This saves the ZIP file so you can download it later
           name: captures-${{ matrix.channel }}
           path: "*.zip"
+          retention-days: 7
