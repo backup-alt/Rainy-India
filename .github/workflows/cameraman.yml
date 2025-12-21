@@ -53,32 +53,23 @@ jobs:
           
           $Images = Get-ChildItem "screenshot_*.jpg"
           
-          if ($null -eq $Images) {
-              Write-Host "No screenshots found."
-              exit 0
-          }
-
           foreach ($Img in $Images) {
               Write-Host "Sending: $($Img.Name)"
-              
               try {
                   $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
                   $Base64 = [System.Convert]::ToBase64String($Bytes)
+                  $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
                   
-                  $Payload = @{ data = @{ image = $Base64 } }
-                  $Body = $Payload | ConvertTo-Json -Depth 20
-                  
-                  # Send to Zoho
-                  $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Write-Host "Success: $($Img.Name) processed by Zoho."
+                  Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
+                  Write-Host "Success: $($Img.Name) sent."
               } catch {
-                  Write-Host "Error sending $($Img.Name): $($_.Exception.Message)"
+                  # This block captures the ACTUAL reason from Zoho
+                  $StreamReader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                  $ErrDetail = $StreamReader.ReadToEnd()
+                  Write-Host "❌ Zoho Rejected $($Img.Name). Reason: $ErrDetail"
               }
-              
-              # Small delay to ensure Zoho processes signals in order
               Start-Sleep -Seconds 2
           }
-
       - name: Upload Captures to GitHub
         uses: actions/upload-artifact@v4
         with:
