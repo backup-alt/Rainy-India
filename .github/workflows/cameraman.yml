@@ -19,7 +19,7 @@ jobs:
         id: set-matrix
         shell: powershell
         run: |
-          # Load the registry and compress to a clean JSON string
+          # Read JSON and compress it for the matrix output
           $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
           echo "matrix=$json" >> $env:GITHUB_OUTPUT
 
@@ -30,28 +30,31 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        # Syntax Fix: The variable 'channel' must hold the fromJson sequence
+        # Syntax Fix: Ensure 'channel' is the only child of matrix here
         channel: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
       - name: Capture and Upload
         shell: powershell
         run: |
-          # 1. FIX FOLDER CONFLICTS: Each channel gets its own isolated folder
+          # 1. ISOLATE WORKSPACE: Avoid local file/temp conflicts
           $Name = "${{ matrix.channel.name }}"
           $VideoID = "${{ matrix.channel.id }}"
           $WorkDir = "monitor_$Name"
           
+          # Clean up any existing folder from a previous crash
           if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
           New-Item -ItemType Directory -Path $WorkDir -Force
           Set-Location $WorkDir
 
           Write-Host "Monitoring $Name (ID: $VideoID)"
 
-          # 2. CAPTURE (Direct ID bypasses random video search)
+          # 2. RESOLVE AND CAPTURE
+          # Uses the direct ID from your channels.json to avoid random videos
           $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$VideoID" --no-warnings
 
           if ($StreamUrl) {
+              # Capture frames directly into the isolated folder
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
               
               # 3. ZOHO SIGNAL
@@ -66,16 +69,17 @@ jobs:
                   Start-Sleep -Seconds 2
               }
 
-              # 4. ZIP THE FILES (Move zip up to be a 'normal' downloadable file)
+              # 4. ZIP THE FILES
+              # Moves the zip to the root level so the next step can find it
               Compress-Archive -Path "shot_*.jpg" -DestinationPath "../$Name.zip" -Force
           } else {
-              Write-Error "ERROR: Could not resolve stream for $Name"
+              Write-Error "Could not resolve stream for ID: $VideoID"
           }
 
       - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Unique name for each channel to avoid 409 Conflict error
+          # Creates a standard, unique downloadable zip for each channel
           name: ${{ matrix.channel.name }}-Captures
           path: "${{ matrix.channel.name }}.zip"
           retention-days: 1
