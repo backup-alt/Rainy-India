@@ -27,14 +27,25 @@ jobs:
         run: |
           $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
           
-          $Image = Get-Item "live_news.jpg"
-          if ($Image) {
-              # Convert image to Base64 to send into Zoho
-              $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)
+          if (Test-Path "live_news.jpg") {
+              $Bytes = [System.IO.File]::ReadAllBytes("live_news.jpg")
               $Base64 = [System.Convert]::ToBase64String($Bytes)
               
-              $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
+              # Zoho expects "data" to contain the keys defined in your schema
+              $Payload = @{
+                  data = @{
+                      image = $Base64
+                  }
+              }
               
-              $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-              Write-Host "✅ Image Sent! Check your email in 60 seconds."
+              $Body = $Payload | ConvertTo-Json -Depth 20
+              
+              try {
+                  $Response = Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
+                  Write-Host "✅ Signal Sent! Response: $Response"
+              } catch {
+                  Write-Error "❌ Zoho rejected the request: $_"
+                  # This will print the actual error from Zoho to your GitHub logs
+                  $_.Exception.Response.GetResponseStream() | ForEach-Object { (New-Object System.IO.StreamReader($_)).ReadToEnd() }
+              }
           }
