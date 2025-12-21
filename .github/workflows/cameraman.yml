@@ -1,98 +1,81 @@
-name: News Bot Live (Multi-Capture TV)
+name: India News Monitor (Official TV Feeds - ZIP)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Total duration to watch the TV (seconds)'
+        description: 'Duration to monitor each channel (seconds)'
         required: true
-        default: '20'
+        default: '15'
 
 jobs:
-  capture-and-signal:
+  setup:
     runs-on: self-hosted
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Discover and Capture TV Stream
+      
+      - name: Load Channels from List
+        id: set-matrix
         shell: powershell
         run: |
+          if (!(Test-Path "channels.txt")) {
+              "@ThanthiTV`n@PolimerNews" | Out-File "channels.txt"
+          }
+          $channels = Get-Content "channels.txt" | Where-Object { $_ -ne "" }
+          $json = $channels | ConvertTo-Json -Compress
+          echo "matrix=$json" >> $env:GITHUB_OUTPUT
+
+  monitor:
+    needs: setup
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        channel: ${{ fromJson(needs.setup.outputs.matrix) }}
+      max-parallel: 5
+      fail-fast: false
+
+    steps:
+      - name: Discover and Capture Official Ticker
+        shell: powershell
+        run: |
+          $Handle = "${{ matrix.channel }}"
           $Duration = "${{ github.event.inputs.duration }}"
           
-          # 1. Cleanup old files
           Remove-Item "screenshot_*.jpg" -ErrorAction SilentlyContinue
           
-          Write-Host "Searching for the active Thanthi TV broadcast..."
-          
-          # 2. Smart Discovery Logic
-          # First, try the default live endpoint
-          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
-          
-          # If it picks up the 'Bermuda/Secret' video (vgv7lpjg6bs) or other features, search for the HD News Feed
-          if ($StreamUrl -match "vgv7lpjg6bs" -or $null -eq $StreamUrl) {
-              Write-Host "Default link redirected to a documentary. Searching for LIVE HD News feed..."
-              $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:Thanthi TV LIVE HD news" --no-warnings
-          }
+          Write-Host "🔍 Searching for the Official TV Broadcast for $Handle..."
+          $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:$Handle official live news HD" --no-warnings
 
           if ($StreamUrl) {
-              Write-Host "✅ Connected to Live TV Stream."
-              # fps=0.4 results in 1 frame every 2.5 seconds
-              # Crop is set to catch the bottom news ticker area
-              # We scale down to 800px width and increase compression (q:v 5) to stay under the 64KB payload limit
+              # Capture frames
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
-              Write-Host "✅ Capture complete."
-          } else {
-              Write-Error "❌ Could not find an active TV broadcast."
-              exit 1
+              
+              # Signal Loop to Zoho
+              $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
+              $Images = Get-ChildItem "screenshot_*.jpg"
+
+              foreach ($Img in $Images) {
+                  try {
+                      $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
+                      $Base64 = [System.Convert]::ToBase64String($Bytes)
+                      $Body = @{ data = @{ image = $Base64; channel = $Handle } } | ConvertTo-Json
+                      Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
+                  } catch { Write-Host "⚠️ Failed to send: $($_.Exception.Message)" }
+                  Start-Sleep -Seconds 2
+              }
+
+              # --- NEW ZIP LOGIC ---
+              $ZipName = "$($Handle.Replace('@','')).zip"
+              Write-Host "📦 Creating ZIP archive: $ZipName"
+              Compress-Archive -Path "screenshot_*.jpg" -DestinationPath $ZipName -Force
           }
 
-      - name: Trigger Zoho Signals
-        shell: powershell
-        run: |
-          $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
-          
-          $Images = Get-ChildItem "screenshot_*.jpg"
-          
-          foreach ($Img in $Images) {
-              Write-Host "Sending: $($Img.Name)"
-              try {
-                  $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
-                  $Base64 = [System.Convert]::ToBase64String($Bytes)
-                  $Body = @{ data = @{ image = $Base64 } } | ConvertTo-Json -Depth 20
-                  
-                  Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  Write-Host "Success: $($Img.Name) sent."
-              } catch {
-                  # This block captures the ACTUAL reason from Zoho
-                  $StreamReader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                  $ErrDetail = $StreamReader.ReadToEnd()
-                  Write-Host "❌ Zoho Rejected $($Img.Name). Reason: $ErrDetail"
-              }
-              Start-Sleep -Seconds 2
-          }
-      - name: Upload Captures to GitHub
+      - name: Upload Channel ZIP to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: live-tv-screenshots
-          path: screenshot_*.jpg
-
-      - name: Discover and Capture TV Stream
-        shell: powershell
-        run: |
-          $Duration = "${{ github.event.inputs.duration }}"
-          Remove-Item "screenshot_*.jpg" -ErrorAction SilentlyContinue
-          
-          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/@ThanthiTV/live" --no-warnings
-          
-          if ($StreamUrl -match "vgv7lpjg6bs") {
-              $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:Thanthi TV LIVE HD news" --no-warnings
-          }
-
-          if ($StreamUrl) {
-              # Optimized for 64KB Signal Limit:
-              # - scale=800: downscales from 1280 to 800
-              # - q:v 5: increases compression slightly
-              ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
-              Write-Host "✅ Optimized captures created."
-          }
+          # This saves the ZIP file so you can download it later
+          name: captures-${{ matrix.channel }}
+          path: "*.zip"
