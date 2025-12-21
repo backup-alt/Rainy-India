@@ -1,10 +1,10 @@
-name: India News Monitor (Fixed Syntax)
+name: India News Monitor (Encoding Fixed)
 
 on:
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Seconds to monitor'
+        description: 'Seconds to monitor each channel'
         required: true
         default: '15'
 
@@ -43,14 +43,14 @@ jobs:
           $Handle = "${{ matrix.channel }}"
           $Duration = "${{ github.event.inputs.duration }}"
           
-          Write-Host "🔍 Processing: $Handle"
+          Write-Host "--- Processing: $Handle ---"
           Remove-Item "screenshot_*.jpg", "*.zip" -ErrorAction SilentlyContinue
 
-          # Find the Stream
+          # 1. Search Logic
           $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:$Handle official live news HD" --no-warnings
 
           if ($StreamUrl) {
-              Write-Host "✅ Stream Found. Capturing..."
+              Write-Host "SUCCESS: Live Feed Found. Capturing..."
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
               
               $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
@@ -63,8 +63,8 @@ jobs:
                       $Body = @{ data = @{ image = $Base64; channel = $Handle } } | ConvertTo-Json
                       Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
                       Write-Host "Sent $($Img.Name)"
-                  } catch {
-                      Write-Host "⚠️ Signal Error"
+                  } catch { 
+                      Write-Host "Signal Error for $Handle" 
                   }
                   Start-Sleep -Seconds 2
               }
@@ -72,9 +72,8 @@ jobs:
               $ZipName = "$($Handle.Replace('@','')).zip"
               Compress-Archive -Path "screenshot_*.jpg" -DestinationPath $ZipName -Force
               Remove-Item "screenshot_*.jpg"
-          }
-          else {
-              Write-Error "❌ Stream not found for $Handle"
+          } else {
+              Write-Error "ERROR: Stream not found for $Handle"
           }
 
       - name: Upload Zip Artifact
