@@ -1,4 +1,4 @@
-name: India News Monitor (JSON Parallel)
+name: India News Monitor (JSON Fixed)
 
 on:
   workflow_dispatch:
@@ -11,7 +11,8 @@ jobs:
   setup:
     runs-on: self-hosted
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      # Explicitly naming the output
+      channels: ${{ steps.set-matrix.outputs.channels }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,9 +20,10 @@ jobs:
         id: set-matrix
         shell: powershell
         run: |
-          # Use a Safe PowerShell output method for JSON
+          # Compress to a one-liner to avoid any 'mapping' issues in YAML
           $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
-          echo "matrix=$json" >> $env:GITHUB_OUTPUT
+          # Use a clean variable name
+          echo "channels=$json" >> $env:GITHUB_OUTPUT
 
   monitor:
     needs: setup
@@ -30,16 +32,16 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        # THE FIX: Ensure matrix is a direct child of strategy with no intermediate keys
-        channel: ${{ fromJson(needs.setup.outputs.matrix) }}
+        # Use the explicit output name from the setup job
+        include: ${{ fromJson(needs.setup.outputs.channels) }}
 
     steps:
       - name: Parallel Capture
         shell: powershell
         run: |
-          $Name = "${{ matrix.channel.name }}"
-          $ID = "${{ matrix.channel.id }}"
-          # ISOLATE WORKSPACE: Prevents temp/exe conflicts on your PC
+          # In 'include' mode, variables are accessed directly by key name
+          $Name = "${{ matrix.name }}"
+          $ID = "${{ matrix.id }}"
           $WorkDir = "D:\hoilday\rain\work_$Name"
           
           if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
@@ -48,18 +50,14 @@ jobs:
 
           Write-Host "--- Monitoring $Name ---"
 
-          # CAPTURE
           $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
           if ($Url) {
               ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
-              
-              # ZIP (Stored in main folder for easy download)
               Compress-Archive -Path "shot_*.jpg" -DestinationPath "D:\hoilday\rain\$Name.zip" -Force
           }
 
-      - name: Upload Zip Artifact
+      - name: Upload Zip
         uses: actions/upload-artifact@v4
         with:
-          name: captures-${{ matrix.channel.name }}
-          path: "D:/hoilday/rain/${{ matrix.channel.name }}.zip"
-          retention-days: 1
+          name: captures-${{ matrix.name }}
+          path: "D:/hoilday/rain/${{ matrix.name }}.zip"
