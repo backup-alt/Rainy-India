@@ -1,4 +1,4 @@
-name: India News Monitor (Encoding Fixed)
+name: India News Monitor (Final Stable)
 
 on:
   workflow_dispatch:
@@ -43,14 +43,21 @@ jobs:
           $Handle = "${{ matrix.channel }}"
           $Duration = "${{ github.event.inputs.duration }}"
           
-          Write-Host "--- Processing: $Handle ---"
+          # Use a clean name for files (remove @ and special chars)
+          $CleanHandle = $Handle.Replace('@','').Replace('.','')
+          
+          Write-Host "--- Starting discovery for $Handle ---"
           Remove-Item "screenshot_*.jpg", "*.zip" -ErrorAction SilentlyContinue
 
-          # 1. Search Logic
-          $StreamUrl = python -m yt_dlp -f best -g "ytsearch1:$Handle official live news HD" --no-warnings
+          # 1. ENHANCED SEARCH: Forces local language match to avoid English news channels
+          $SearchQuery = "ytsearch1:$Handle Tamil Official Live News HD"
+          $StreamUrl = python -m yt_dlp -f best -g "$SearchQuery" --no-warnings
 
           if ($StreamUrl) {
-              Write-Host "SUCCESS: Live Feed Found. Capturing..."
+              $Title = python -m yt_dlp --get-title "$SearchQuery" --no-warnings
+              Write-Host "SUCCESS: Found $Title"
+              
+              # 2. Capture (fps=0.4 is 1 frame every 2.5 seconds)
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t $Duration -q:v 5 screenshot_%03d.jpg
               
               $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
@@ -63,13 +70,12 @@ jobs:
                       $Body = @{ data = @{ image = $Base64; channel = $Handle } } | ConvertTo-Json
                       Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
                       Write-Host "Sent $($Img.Name)"
-                  } catch { 
-                      Write-Host "Signal Error for $Handle" 
-                  }
+                  } catch { Write-Host "Signal Error" }
                   Start-Sleep -Seconds 2
               }
 
-              $ZipName = "$($Handle.Replace('@','')).zip"
+              # 3. Zip with Unique Name
+              $ZipName = "$CleanHandle.zip"
               Compress-Archive -Path "screenshot_*.jpg" -DestinationPath $ZipName -Force
               Remove-Item "screenshot_*.jpg"
           } else {
@@ -79,5 +85,7 @@ jobs:
       - name: Upload Zip Artifact
         uses: actions/upload-artifact@v4
         with:
+          # UNIQUE NAME: Uses the matrix channel to prevent 409 Conflict
           name: captures-${{ matrix.channel }}
           path: "*.zip"
+          retention-days: 1
