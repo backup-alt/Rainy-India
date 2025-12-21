@@ -19,61 +19,64 @@ jobs:
         id: set-matrix
         shell: powershell
         run: |
+          # Read the JSON and ensure it's a single-line string for the matrix
           $json = Get-Content "channels.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Compress
-          Write-Output "matrix=$json" >> $env:GITHUB_OUTPUT
+          echo "matrix=$json" >> $env:GITHUB_OUTPUT
 
   monitor:
     needs: setup
     runs-on: self-hosted
     strategy:
-      matrix:
-        channel: ${{ fromJson(needs.setup.outputs.matrix) }}
       fail-fast: false
       max-parallel: 3
+      matrix:
+        # Fixed syntax: The matrix must contain the channel object
+        channel: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
       - name: Capture and Upload
         shell: powershell
         run: |
-          # 1. CREATE UNIQUE DIRECTORY to avoid temp folder errors
+          # 1. FIX FOLDER CONFLICTS: Create a dedicated local folder for this specific channel
           $ChannelName = "${{ matrix.channel.name }}"
           $VideoID = "${{ matrix.channel.id }}"
-          $WorkingDir = "work_$ChannelName"
-          New-Item -ItemType Directory -Path $WorkingDir -Force
-          Set-Location $WorkingDir
+          $WorkDir = "monitor_$ChannelName"
+          
+          if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $WorkDir -Force
+          Set-Location $WorkDir
 
           Write-Host "--- Monitoring $ChannelName (ID: $VideoID) ---"
 
-          # 2. RESOLVE DIRECT URL
-          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$VideoID" --no-warnings
+          # 2. RESOLVE AND CAPTURE
+          $StreamUrl = python -m yt_dlp -f best -g "https://www.youtube.com/watch=$VideoID" --no-warnings
 
           if ($StreamUrl) {
-              # 3. CAPTURE (1 frame every 2.5s)
+              # Capture frames into the dedicated channel folder
               ffmpeg -i "$StreamUrl" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
               
-              # 4. SIGNAL TO ZOHO
+              # 3. ZOHO SIGNAL
               $SignalUrl = "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198"
               $Images = Get-ChildItem "shot_*.jpg"
 
               foreach ($Img in $Images) {
-                  try {
-                      $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
-                      $Base64 = [System.Convert]::ToBase64String($Bytes)
-                      $Body = @{ data = @{ image = $Base64; channel = $ChannelName } } | ConvertTo-Json
-                      Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
-                  } catch { Write-Host "Signal Error" }
+                  $Bytes = [System.IO.File]::ReadAllBytes($Img.FullName)
+                  $Base64 = [System.Convert]::ToBase64String($Bytes)
+                  $Body = @{ data = @{ image = $Base64; channel = $ChannelName } } | ConvertTo-Json
+                  Invoke-RestMethod -Method Post -Uri $SignalUrl -Body $Body -ContentType "application/json"
                   Start-Sleep -Seconds 2
               }
 
-              # 5. ZIP FOR ARTIFACTS
+              # 4. ZIP THE FILES (Moves zip up one level for easy upload)
               Compress-Archive -Path "shot_*.jpg" -DestinationPath "../$ChannelName.zip" -Force
           } else {
               Write-Error "Could not connect to ID: $VideoID"
           }
 
-      - name: Upload ZIP as Normal File
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
+          # Normal downloadable file name
           name: ${{ matrix.channel.name }}-Captures
           path: "${{ matrix.channel.name }}.zip"
           retention-days: 1
