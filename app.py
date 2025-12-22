@@ -7,6 +7,7 @@ from zcatalyst_sdk import catalyst
 
 app = Flask(__name__)
 
+
 def clean_tamil_text(text):
     """Removes OCR noise and keeps Tamil, English, and Numbers."""
     # Zia is cleaner than Tesseract, but we still filter for safety
