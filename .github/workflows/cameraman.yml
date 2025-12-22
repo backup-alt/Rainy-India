@@ -1,21 +1,22 @@
-name: India News Monitor (100% Cloud Automation)
+name: India News Monitor (Final Cloud Version)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manual button
   schedule:
-    - cron: '15,45 * * * *'
+    - cron: '15,45 * * * *' # Automatic run every 30 mins
 
 jobs:
   monitor:
-    runs-on: ubuntu-latest # THIS replaces your laptop
+    runs-on: ubuntu-latest # Uses GitHub's free cloud servers
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 4 # Processes 4 channels at once
       matrix:
-        include: [
-          { name: "Thanthi", id: "j1nzTy5q_1Y" },
-          { name: "Polimer", id: "Ei6NUWLQCQM" }
-        ]
+        include:
+          - { name: "Thanthi", id: "j1nzTy5q_1Y" }
+          - { name: "Polimer", id: "Ei6NUWLQCQM" }
+          - { name: "SunNews", id: "GNcDkMTBnx4" }
+          - { name: "News18Tamil", id: "WkUMroKX7_c" }
 
     steps:
       - name: Checkout Code
@@ -29,19 +30,31 @@ jobs:
 
       - name: Capture and Signal
         env:
-          ZOHO_CODE: ${{ secrets.ZOHO_DIGEST }} # Securely pulls your secret
+          ZOHO_CODE: ${{ secrets.ZOHO_DIGEST }}
+          COOKIES: ${{ secrets.YT_COOKIES }}
+          UA: ${{ secrets.USER_AGENT }}
+          PO: ${{ secrets.PO_DATA }}
         run: |
           NAME="${{ matrix.name }}"
           ID="${{ matrix.id }}"
           
-          # 1. Get Stream URL
-          URL=$(python3 -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
+          # 1. Create temporary cookies file
+          echo "$COOKIES" > youtube_cookies.txt
+
+          # 2. Advanced Bypass Capture
+          # Uses User-Agent, Cookies, and PO Token to look like a human browser
+          URL=$(python3 -m yt_dlp \
+            --cookies youtube_cookies.txt \
+            --user-agent "$UA" \
+            --extractor-args "youtube:player_client=ios,web_embedded;po_token=$PO" \
+            -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
 
           if [ ! -z "$URL" ]; then
-              # 2. Capture 15 seconds of news
+              echo "Streaming $NAME..."
+              # Capture 15 seconds, crop to news ticker area
               ffmpeg -i "$URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
-              # 3. Send to Zoho
+              # 3. Send to Zoho Signal
               for img in shot_*.jpg; do
                   b64_data=$(base64 -w 0 "$img")
                   curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
@@ -49,11 +62,17 @@ jobs:
                   -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$NAME\"}}"
                   sleep 2
               done
+          else
+              echo "Error: Bot check failed for $NAME. Check your Cookies/PO Token."
+              exit 1
           fi
+          
+          # Cleanup sensitive data
+          rm youtube_cookies.txt
 
-      - name: Save Artifacts
+      - name: Archive Local Backup
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}-shots
+          name: ${{ matrix.name }}-frames
           path: shot_*.jpg
           retention-days: 1
