@@ -1,4 +1,4 @@
-name: India News Monitor (Playwright Cloud v2)
+name: India News Monitor (Deep Sniffer Cloud)
 
 on:
   workflow_dispatch:
@@ -15,8 +15,6 @@ jobs:
         include:
           - { name: "Thanthi", id: "j1nzTy5q_1Y" }
           - { name: "Polimer", id: "Ei6NUWLQCQM" }
-          - { name: "SunNews", id: "GNcDkMTBnx4" }
-          - { name: "News18Tamil", id: "WkUMroKX7_c" }
 
     steps:
       - name: Checkout Code
@@ -41,11 +39,9 @@ jobs:
           CHANNEL_NAME: ${{ matrix.name }}
           VIDEO_ID: ${{ matrix.id }}
         run: |
-          # The Python script is now more surgical in what it 'grabs'
           STREAM_URL=$(python3 - <<'EOF'
           import asyncio
           import os
-          import re
           from playwright.async_api import async_playwright
           
           async def get_stream_url():
@@ -53,71 +49,69 @@ jobs:
               user_agent = os.getenv("UA")
               
               async with async_playwright() as p:
-                  browser = await p.chromium.launch(headless=True)
-                  # Use a very common browser context
+                  # Launch with arguments to disable automation flags
+                  browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
                   context = await browser.new_context(user_agent=user_agent)
                   page = await context.new_page()
                   
                   stream_link = ""
                   
-                  # Monitor network traffic with strict filtering
                   def handle_request(request):
                       nonlocal stream_link
                       url = request.url
-                      # We only want actual video manifest links, ignoring stats and ads
-                      if ".m3u8" in url and "index.m3u8" in url and "stats" not in url and "googleads" not in url:
+                      # Searching for the HLS/Master playlist keywords
+                      if ("m3u8" in url or "playlist" in url) and "googlevideo" in url and "stats" not in url:
                           stream_link = url
           
                   page.on("request", handle_request)
           
                   try:
-                      # Go to the mobile version of the site (sometimes lighter/faster)
-                      await page.goto(f"https://www.youtube.com/watch?v={video_id}", timeout=60000)
+                      await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="networkidle", timeout=60000)
                       
-                      # Click the 'Play' button if it appears (simulating human)
-                      try:
-                          await page.click("button.ytp-large-play-button", timeout=5000)
-                      except:
-                          pass
-          
-                      # Wait longer for the stream to actually initialize
-                      for _ in range(30):
+                      # Simulate human behavior: Scroll and wait
+                      await page.mouse.wheel(0, 500)
+                      await asyncio.sleep(5)
+                      await page.mouse.wheel(0, -500)
+                      
+                      # Click the player area to ensure focus
+                      await page.click("#movie_player", force=True)
+                      
+                      # Final wait for stream generation
+                      for _ in range(40):
                           if stream_link:
                               break
                           await asyncio.sleep(1)
                       
                       if stream_link:
                           print(stream_link)
-                  except Exception:
+                  except:
                       pass
                   finally:
                       await browser.close()
           
-          if __name__ == "__main__":
-              asyncio.run(get_stream_url())
+          asyncio.run(get_stream_url())
           EOF
                     )
           
-          # Only proceed if the URL looks like a real video stream
-          if [[ "$STREAM_URL" == *".m3u8"* ]]; then
-              echo "✅ Valid Stream found. Capturing with FFmpeg..."
+          if [[ "$STREAM_URL" == *"googlevideo"* ]]; then
+              echo "✅ Deep Sniffer succeeded. Capturing..."
               ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
               for img in shot_*.jpg; do
                   b64_data=$(base64 -w 0 "$img")
                   curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
                   -H "Content-Type: application/json" \
-                  -d "{"data": {"image": "$b64_data", "channel": "$CHANNEL_NAME"}}"
+                  -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$CHANNEL_NAME\"}}"
                   sleep 2
               done
           else
-              echo "❌ Error: Could not find a valid .m3u8 link. Found: $STREAM_URL"
+              echo "❌ Error: Could not find stream. YouTube is blocking GitHub IPs entirely."
               exit 1
           fi
 
-      - name: Archive Frames
+      - name: Debug Output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}-frames
+          name: ${{ matrix.name }}-debug
           path: "*.jpg"
