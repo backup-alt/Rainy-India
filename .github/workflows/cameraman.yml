@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 2 # Running real browsers takes more memory, so we limit to 2 at a time
+      max-parallel: 2
       matrix:
         include:
           - { name: "Thanthi", id: "j1nzTy5q_1Y" }
@@ -32,72 +32,74 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           python -m pip install playwright
-          playwright install chromium
+          python -m playwright install chromium
 
       - name: Capture and Signal
         env:
           ZOHO_CODE: ${{ secrets.ZOHO_DIGEST }}
           UA: ${{ secrets.USER_AGENT }}
+          CHANNEL_NAME: ${{ matrix.name }}
+          VIDEO_ID: ${{ matrix.id }}
         run: |
-          NAME="${{ matrix.name }}"
-          ID="${{ matrix.id }}"
+          # We export the variables to a temp file to avoid shell quoting issues
+          # Then we run the Python script using a clean block
+          STREAM_URL=$(python3 - <<'EOF'
+          import asyncio
+          import os
+          from playwright.async_api import async_playwright
           
-          # This Python script acts as a 'Human' viewer
-          STREAM_URL=$(python3 - <<EOF
-import asyncio
-from playwright.async_api import async_playwright
-
-async def get_stream_url(video_id):
-    async with async_playwright() as p:
-        # Launching a real browser to fool YouTube's bot detection
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent="$UA")
-        page = await context.new_page()
-        
-        stream_link = None
-        
-        # Monitor network requests to catch the .m3u8 stream link
-        page.on("request", lambda request: check_request(request))
-        
-        def check_request(request):
-            nonlocal stream_link
-            if ".m3u8" in request.url or "manifest.googlevideo.com" in request.url:
-                stream_link = request.url
-
-        try:
-            await page.goto(f"https://www.youtube.com/watch?v={video_id}", timeout=60000)
-            # Wait for the player to actually start 'playing'
-            await asyncio.sleep(15) 
-            if stream_link:
-                print(stream_link)
-        except:
-            pass
-        finally:
-            await browser.close()
-
-asyncio.run(get_stream_url("$ID"))
-EOF
-)
-
+          async def get_stream_url():
+              video_id = os.getenv("VIDEO_ID")
+              user_agent = os.getenv("UA")
+              
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(headless=True)
+                  context = await browser.new_context(user_agent=user_agent)
+                  page = await context.new_page()
+                  
+                  stream_link = ""
+                  
+                  # Monitor network traffic
+                  def handle_request(request):
+                      nonlocal stream_link
+                      url = request.url
+                      if ".m3u8" in url or "manifest" in url:
+                          stream_link = url
+          
+                  page.on("request", handle_request)
+          
+                  try:
+                      await page.goto(f"https://www.youtube.com/watch?v={video_id}", timeout=60000)
+                      # Give the player time to start and trigger the network request
+                      await asyncio.sleep(20)
+                      if stream_link:
+                          print(stream_link)
+                  except Exception:
+                      pass
+                  finally:
+                      await browser.close()
+          
+          if __name__ == "__main__":
+              asyncio.run(get_stream_url())
+          EOF
+          )
           if [ ! -z "$STREAM_URL" ]; then
-              echo "✅ Stream found for $NAME. Capturing ticker..."
-              # Capture 15 seconds from the browser-provided stream
+              echo "✅ Stream found. Processing..."
               ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
-              # Send to Zoho
               for img in shot_*.jpg; do
                   b64_data=$(base64 -w 0 "$img")
                   curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
                   -H "Content-Type: application/json" \
-                  -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$NAME\"}}"
+                  -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$CHANNEL_NAME\"}}"
                   sleep 2
               done
           else
-              echo "❌ ERROR: Playwright could not find a valid stream. YouTube is still blocking the cloud IP."
+              echo "❌ Stream not found. YouTube may be blocking the Headless Browser."
               exit 1
           fi
 
-      - name: Backup Images
+      - name: Archive Frames
         if: always()
         uses: actions/upload-artifact@v4
         with:
