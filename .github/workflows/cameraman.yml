@@ -1,16 +1,16 @@
 name: India News Monitor (Final Cloud Version)
 
 on:
-  workflow_dispatch: # Manual button
+  workflow_dispatch:
   schedule:
-    - cron: '15,45 * * * *' # Automatic run every 30 mins
+    - cron: '15,45 * * * *'
 
 jobs:
   monitor:
-    runs-on: ubuntu-latest # Uses GitHub's free cloud servers
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 4 # Processes 4 channels at once
+      max-parallel: 4
       matrix:
         include:
           - { name: "Thanthi", id: "j1nzTy5q_1Y" }
@@ -26,7 +26,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          python3 -m pip install yt-dlp
+          # We force update yt-dlp to get the latest bot-bypass patches
+          python3 -m pip install -U yt-dlp
 
       - name: Capture and Signal
         env:
@@ -42,16 +43,18 @@ jobs:
           echo "$COOKIES" > youtube_cookies.txt
 
           # 2. Advanced Bypass Capture
-          # Uses User-Agent, Cookies, and PO Token to look like a human browser
+          # We use 'android' and 'ios' clients which are often less restricted
+          # The po_token is passed via extractor-args
           URL=$(python3 -m yt_dlp \
             --cookies youtube_cookies.txt \
             --user-agent "$UA" \
-            --extractor-args "youtube:player_client=ios,web_embedded;po_token=$PO" \
+            --extractor-args "youtube:player_client=android,ios;po_token=$PO" \
             -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
 
           if [ ! -z "$URL" ]; then
-              echo "Streaming $NAME..."
-              # Capture 15 seconds, crop to news ticker area
+              echo "--- Successfully extracted stream for $NAME ---"
+              
+              # Capture 15 seconds, scale and crop to news ticker area
               ffmpeg -i "$URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
               # 3. Send to Zoho Signal
@@ -63,16 +66,17 @@ jobs:
                   sleep 2
               done
           else
-              echo "Error: Bot check failed for $NAME. Check your Cookies/PO Token."
+              echo "Error: YouTube Bot Detection blocked the stream for $NAME."
+              echo "Check if your PO_TOKEN or COOKIES are still fresh."
               exit 1
           fi
           
-          # Cleanup sensitive data
           rm youtube_cookies.txt
 
-      - name: Archive Local Backup
+      - name: Backup Artifacts
+        if: always() # Run even if capture fails to check for debug logs
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}-frames
-          path: shot_*.jpg
+          name: ${{ matrix.name }}-shots
+          path: "*.jpg"
           retention-days: 1
