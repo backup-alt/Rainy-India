@@ -1,5 +1,3 @@
 flask
-pytesseract
 Pillow
 zcatalyst-sdk
-requests
