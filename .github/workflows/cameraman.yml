@@ -1,82 +1,59 @@
-name: India News Monitor (24/7 Autonomous)
+name: India News Monitor (100% Cloud Automation)
 
 on:
-  workflow_dispatch: # Manual trigger
+  workflow_dispatch:
   schedule:
-    # Runs at 15 and 45 minutes past every hour (UTC).
-    # This avoids "on-the-hour" traffic peaks for better reliability.
     - cron: '15,45 * * * *'
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      channels: ${{ steps.set-matrix.outputs.channels }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Load and Sanitize Registry
-        id: set-matrix
-        shell: bash # Standard for Linux Cloud
-        run: |
-          # Read JSON and compress it into a single line for the matrix
-          content=$(cat channels.json | jq -c .)
-          echo "channels=$content" >> $GITHUB_OUTPUT
-
   monitor:
-    needs: setup
-    runs-on: self-hosted
+    runs-on: ubuntu-latest # THIS replaces your laptop
     strategy:
       fail-fast: false
-      max-parallel: 4 # Cloud servers (Oracle ARM) can handle more load
+      max-parallel: 4
       matrix:
-        # The 'include' method prevents "A mapping was not expected" errors
-        include: ${{ fromJson(needs.setup.outputs.channels) }}
+        include: [
+          { name: "Thanthi", id: "j1nzTy5q_1Y" },
+          { name: "Polimer", id: "Ei6NUWLQCQM" }
+        ]
 
     steps:
-      - name: Process Channel
-        shell: bash
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 -m pip install yt-dlp
+
+      - name: Capture and Signal
+        env:
+          ZOHO_CODE: ${{ secrets.ZOHO_DIGEST }} # Securely pulls your secret
         run: |
           NAME="${{ matrix.name }}"
           ID="${{ matrix.id }}"
-          WORKDIR="/home/ubuntu/monitor/work_$NAME"
           
-          # 1. CLEAN WORKSPACE
-          mkdir -p "$WORKDIR"
-          cd "$WORKDIR"
-          rm -f shot_*.jpg  # Clear old frames
+          # 1. Get Stream URL
+          URL=$(python3 -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
 
-          echo "--- Monitoring $NAME (ID: $ID) ---"
-
-          # 2. RESOLVE LIVE URL
-          STREAM_URL=$(python3 -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
-
-          if [ ! -z "$STREAM_URL" ]; then
-              # 3. CAPTURE FRAMES
-              # fps=0.4 (1 frame per 2.5s), scale to 800px width, crop to news ticker area
-              ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
+          if [ ! -z "$URL" ]; then
+              # 2. Capture 15 seconds of news
+              ffmpeg -i "$URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
-              # 4. ZOHO SIGNAL DISPATCH
+              # 3. Send to Zoho
               for img in shot_*.jpg; do
-                  # Convert image to base64 for the API
                   b64_data=$(base64 -w 0 "$img")
-                  
-                  # Send to Zoho Signal
-                  curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198" \
+                  curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
                   -H "Content-Type: application/json" \
                   -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$NAME\"}}"
-                  
-                  sleep 2 # Prevent API rate limiting
+                  sleep 2
               done
-          else
-              echo "Error: Could not find live stream for $ID"
-              exit 1
           fi
 
-      - name: Archive to Artifacts
+      - name: Save Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: captures-${{ matrix.name }}
-          path: "/home/ubuntu/monitor/work_${{ matrix.name }}/shot_*.jpg"
+          name: ${{ matrix.name }}-shots
+          path: shot_*.jpg
           retention-days: 1
