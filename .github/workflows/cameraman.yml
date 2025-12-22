@@ -1,67 +1,82 @@
-name: India News Monitor (JSON Final)
+name: India News Monitor (24/7 Autonomous)
 
 on:
-  workflow_dispatch:
-    inputs:
-      duration:
-        description: 'Seconds'
-        default: '15'
+  workflow_dispatch: # Manual trigger
+  schedule:
+    # Runs at 15 and 45 minutes past every hour (UTC).
+    # This avoids "on-the-hour" traffic peaks for better reliability.
+    - cron: '15,45 * * * *'
 
 jobs:
   setup:
     runs-on: self-hosted
     outputs:
-      # This MUST be a single line of clean JSON
       channels: ${{ steps.set-matrix.outputs.channels }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Load Registry
+
+      - name: Load and Sanitize Registry
         id: set-matrix
-        shell: powershell
+        shell: bash # Standard for Linux Cloud
         run: |
-          # 1. Load the JSON file
-          $raw = Get-Content "channels.json" -Raw | ConvertFrom-Json
-          # 2. Compress it into a one-liner with NO spaces
-          $json = $raw | ConvertTo-Json -Compress
-          # 3. Use the safest output method for Windows Runners
-          "channels=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          # Read JSON and compress it into a single line for the matrix
+          content=$(cat channels.json | jq -c .)
+          echo "channels=$content" >> $GITHUB_OUTPUT
 
   monitor:
     needs: setup
     runs-on: self-hosted
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 4 # Cloud servers (Oracle ARM) can handle more load
       matrix:
-        # THE FIX: This structure prevents the 'mapping' error
+        # The 'include' method prevents "A mapping was not expected" errors
         include: ${{ fromJson(needs.setup.outputs.channels) }}
 
     steps:
-      - name: Parallel Capture
-        shell: powershell
+      - name: Process Channel
+        shell: bash
         run: |
-          # With 'include', variables are accessed directly
-          $Name = "${{ matrix.name }}"
-          $ID = "${{ matrix.id }}"
-          $WorkDir = "D:\hoilday\rain\work_$Name"
+          NAME="${{ matrix.name }}"
+          ID="${{ matrix.id }}"
+          WORKDIR="/home/ubuntu/monitor/work_$NAME"
           
-          if (Test-Path $WorkDir) { Remove-Item $WorkDir -Recurse -Force }
-          New-Item -ItemType Directory -Path $WorkDir -Force
-          Set-Location $WorkDir
+          # 1. CLEAN WORKSPACE
+          mkdir -p "$WORKDIR"
+          cd "$WORKDIR"
+          rm -f shot_*.jpg  # Clear old frames
 
-          Write-Host "--- Monitoring $Name ---"
+          echo "--- Monitoring $NAME (ID: $ID) ---"
 
-          # Use direct ID
-          $Url = python -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings
-          if ($Url) {
-              ffmpeg -i "$Url" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t ${{ github.event.inputs.duration }} -q:v 5 "shot_%03d.jpg"
-              Compress-Archive -Path "shot_*.jpg" -DestinationPath "D:\hoilday\rain\$Name.zip" -Force
-          }
+          # 2. RESOLVE LIVE URL
+          STREAM_URL=$(python3 -m yt_dlp -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
 
-      - name: Upload Zip
+          if [ ! -z "$STREAM_URL" ]; then
+              # 3. CAPTURE FRAMES
+              # fps=0.4 (1 frame per 2.5s), scale to 800px width, crop to news ticker area
+              ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
+              
+              # 4. ZOHO SIGNAL DISPATCH
+              for img in shot_*.jpg; do
+                  # Convert image to base64 for the API
+                  b64_data=$(base64 -w 0 "$img")
+                  
+                  # Send to Zoho Signal
+                  curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=b0a555bd55752acaed024337f86ca6d2ab09b14dae55da5416db514d8d207705af8719bb34c90e4281dbda4cf6a3a0b14e1a4654a23ede87c0bbe025e4a46198" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$NAME\"}}"
+                  
+                  sleep 2 # Prevent API rate limiting
+              done
+          else
+              echo "Error: Could not find live stream for $ID"
+              exit 1
+          fi
+
+      - name: Archive to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: captures-${{ matrix.name }}
-          path: "D:/hoilday/rain/${{ matrix.name }}.zip"
+          path: "/home/ubuntu/monitor/work_${{ matrix.name }}/shot_*.jpg"
           retention-days: 1
