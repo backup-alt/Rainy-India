@@ -1,4 +1,4 @@
-name: India News Monitor (Playwright Cloud)
+name: India News Monitor (Playwright Cloud v2)
 
 on:
   workflow_dispatch:
@@ -41,11 +41,11 @@ jobs:
           CHANNEL_NAME: ${{ matrix.name }}
           VIDEO_ID: ${{ matrix.id }}
         run: |
-          # We export the variables to a temp file to avoid shell quoting issues
-          # Then we run the Python script using a clean block
+          # The Python script is now more surgical in what it 'grabs'
           STREAM_URL=$(python3 - <<'EOF'
           import asyncio
           import os
+          import re
           from playwright.async_api import async_playwright
           
           async def get_stream_url():
@@ -54,24 +54,38 @@ jobs:
               
               async with async_playwright() as p:
                   browser = await p.chromium.launch(headless=True)
+                  # Use a very common browser context
                   context = await browser.new_context(user_agent=user_agent)
                   page = await context.new_page()
                   
                   stream_link = ""
                   
-                  # Monitor network traffic
+                  # Monitor network traffic with strict filtering
                   def handle_request(request):
                       nonlocal stream_link
                       url = request.url
-                      if ".m3u8" in url or "manifest" in url:
+                      # We only want actual video manifest links, ignoring stats and ads
+                      if ".m3u8" in url and "index.m3u8" in url and "stats" not in url and "googleads" not in url:
                           stream_link = url
           
                   page.on("request", handle_request)
           
                   try:
+                      # Go to the mobile version of the site (sometimes lighter/faster)
                       await page.goto(f"https://www.youtube.com/watch?v={video_id}", timeout=60000)
-                      # Give the player time to start and trigger the network request
-                      await asyncio.sleep(20)
+                      
+                      # Click the 'Play' button if it appears (simulating human)
+                      try:
+                          await page.click("button.ytp-large-play-button", timeout=5000)
+                      except:
+                          pass
+          
+                      # Wait longer for the stream to actually initialize
+                      for _ in range(30):
+                          if stream_link:
+                              break
+                          await asyncio.sleep(1)
+                      
                       if stream_link:
                           print(stream_link)
                   except Exception:
@@ -82,20 +96,22 @@ jobs:
           if __name__ == "__main__":
               asyncio.run(get_stream_url())
           EOF
-          )
-          if [ ! -z "$STREAM_URL" ]; then
-              echo "✅ Stream found. Processing..."
+                    )
+          
+          # Only proceed if the URL looks like a real video stream
+          if [[ "$STREAM_URL" == *".m3u8"* ]]; then
+              echo "✅ Valid Stream found. Capturing with FFmpeg..."
               ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
               for img in shot_*.jpg; do
                   b64_data=$(base64 -w 0 "$img")
                   curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
                   -H "Content-Type: application/json" \
-                  -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$CHANNEL_NAME\"}}"
+                  -d "{"data": {"image": "$b64_data", "channel": "$CHANNEL_NAME"}}"
                   sleep 2
               done
           else
-              echo "❌ Stream not found. YouTube may be blocking the Headless Browser."
+              echo "❌ Error: Could not find a valid .m3u8 link. Found: $STREAM_URL"
               exit 1
           fi
 
