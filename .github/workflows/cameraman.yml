@@ -15,8 +15,6 @@ jobs:
         include:
           - { name: "Thanthi", id: "j1nzTy5q_1Y" }
           - { name: "Polimer", id: "Ei6NUWLQCQM" }
-          - { name: "SunNews", id: "GNcDkMTBnx4" }
-          - { name: "News18Tamil", id: "WkUMroKX7_c" }
 
     steps:
       - name: Checkout Code
