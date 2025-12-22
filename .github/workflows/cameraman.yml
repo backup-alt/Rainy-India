@@ -1,4 +1,4 @@
-name: India News Monitor (Final Cloud Version)
+name: India News Monitor (Playwright Cloud)
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2 # Running real browsers takes more memory, so we limit to 2 at a time
       matrix:
         include:
           - { name: "Thanthi", id: "j1nzTy5q_1Y" }
@@ -22,42 +22,69 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          # We force update yt-dlp to get the latest bot-bypass patches
-          python3 -m pip install -U yt-dlp
+          python -m pip install playwright
+          playwright install chromium
 
       - name: Capture and Signal
         env:
           ZOHO_CODE: ${{ secrets.ZOHO_DIGEST }}
-          COOKIES: ${{ secrets.YT_COOKIES }}
           UA: ${{ secrets.USER_AGENT }}
-          PO: ${{ secrets.PO_DATA }}
         run: |
           NAME="${{ matrix.name }}"
           ID="${{ matrix.id }}"
           
-          # 1. Create temporary cookies file
-          echo "$COOKIES" > youtube_cookies.txt
+          # This Python script acts as a 'Human' viewer
+          STREAM_URL=$(python3 - <<EOF
+import asyncio
+from playwright.async_api import async_playwright
 
-          # 2. Advanced Bypass Capture
-          # We use 'android' and 'ios' clients which are often less restricted
-          # The po_token is passed via extractor-args
-          URL=$(python3 -m yt_dlp \
-            --cookies youtube_cookies.txt \
-            --user-agent "$UA" \
-            --extractor-args "youtube:player_client=android,ios;po_token=$PO" \
-            -f best -g "https://www.youtube.com/watch?v=$ID" --no-warnings)
+async def get_stream_url(video_id):
+    async with async_playwright() as p:
+        # Launching a real browser to fool YouTube's bot detection
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(user_agent="$UA")
+        page = await context.new_page()
+        
+        stream_link = None
+        
+        # Monitor network requests to catch the .m3u8 stream link
+        page.on("request", lambda request: check_request(request))
+        
+        def check_request(request):
+            nonlocal stream_link
+            if ".m3u8" in request.url or "manifest.googlevideo.com" in request.url:
+                stream_link = request.url
 
-          if [ ! -z "$URL" ]; then
-              echo "--- Successfully extracted stream for $NAME ---"
+        try:
+            await page.goto(f"https://www.youtube.com/watch?v={video_id}", timeout=60000)
+            # Wait for the player to actually start 'playing'
+            await asyncio.sleep(15) 
+            if stream_link:
+                print(stream_link)
+        except:
+            pass
+        finally:
+            await browser.close()
+
+asyncio.run(get_stream_url("$ID"))
+EOF
+)
+
+          if [ ! -z "$STREAM_URL" ]; then
+              echo "✅ Stream found for $NAME. Capturing ticker..."
+              # Capture 15 seconds from the browser-provided stream
+              ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
               
-              # Capture 15 seconds, scale and crop to news ticker area
-              ffmpeg -i "$URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
-              
-              # 3. Send to Zoho Signal
+              # Send to Zoho
               for img in shot_*.jpg; do
                   b64_data=$(base64 -w 0 "$img")
                   curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
@@ -66,17 +93,13 @@ jobs:
                   sleep 2
               done
           else
-              echo "Error: YouTube Bot Detection blocked the stream for $NAME."
-              echo "Check if your PO_TOKEN or COOKIES are still fresh."
+              echo "❌ ERROR: Playwright could not find a valid stream. YouTube is still blocking the cloud IP."
               exit 1
           fi
-          
-          rm youtube_cookies.txt
 
-      - name: Backup Artifacts
-        if: always() # Run even if capture fails to check for debug logs
+      - name: Backup Images
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}-shots
+          name: ${{ matrix.name }}-frames
           path: "*.jpg"
-          retention-days: 1
