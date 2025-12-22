@@ -1,4 +1,12 @@
-flask
-pytesseract
-Pillow
-zcatalyst-sdk
+# Web Framework
+Flask==3.0.0
+
+# Image Processing and OCR
+pytesseract==0.3.10
+Pillow==10.1.0
+
+# Zoho Catalyst Connection
+zcatalyst-sdk>=1.0.0
+
+# Handling HTTP requests (useful for edge cases)
+requests==2.31.0
