@@ -1,0 +1,33 @@
+﻿2025-12-19T04:56:34.9144839Z ##[group]Run $ServerUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process".Trim()
+2025-12-19T04:56:34.9146069Z [36;1m$ServerUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process".Trim()[0m
+2025-12-19T04:56:34.9146718Z [36;1mWrite-Host "Target URL: $ServerUrl"[0m
+2025-12-19T04:56:34.9147024Z [36;1m[0m
+2025-12-19T04:56:34.9147341Z [36;1m$Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1[0m
+2025-12-19T04:56:34.9147730Z [36;1m[0m
+2025-12-19T04:56:34.9147909Z [36;1mif ($Image) {[0m
+2025-12-19T04:56:34.9148252Z [36;1m    $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)[0m
+2025-12-19T04:56:34.9148736Z [36;1m    $Base64Image = [System.Convert]::ToBase64String($Bytes)[0m
+2025-12-19T04:56:34.9149169Z [36;1m    $Body = @{ image = $Base64Image } | ConvertTo-Json[0m
+2025-12-19T04:56:34.9149490Z [36;1m    [0m
+2025-12-19T04:56:34.9149741Z [36;1m    try {[0m
+2025-12-19T04:56:34.9150347Z [36;1m        $Response = Invoke-WebRequest -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json" -UseBasicParsing[0m
+2025-12-19T04:56:34.9151212Z [36;1m        Write-Host "Success: $($Response.Content)"[0m
+2025-12-19T04:56:34.9151557Z [36;1m    } catch {[0m
+2025-12-19T04:56:34.9151904Z [36;1m        $ErrorBody = $_.Exception.Response.GetResponseStream()[0m
+2025-12-19T04:56:34.9152363Z [36;1m        $Reader = New-Object System.IO.StreamReader($ErrorBody)[0m
+2025-12-19T04:56:34.9152769Z [36;1m        $Details = $Reader.ReadToEnd()[0m
+2025-12-19T04:56:34.9153215Z [36;1m        Write-Host "Upload Failed. Server said: $Details"[0m
+2025-12-19T04:56:34.9153636Z [36;1m        exit 1[0m
+2025-12-19T04:56:34.9153917Z [36;1m    }[0m
+2025-12-19T04:56:34.9154133Z [36;1m}[0m
+2025-12-19T04:56:34.9184247Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+2025-12-19T04:56:34.9184583Z ##[endgroup]
+2025-12-19T04:56:35.3661821Z Target URL: https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/process
+2025-12-19T04:57:17.7586626Z You cannot call a method on a null-valued expression.
+2025-12-19T04:57:17.7588407Z At D:\hoilday\rain\actions-runner-win-x64-2.329.0\_work\_temp\66585296-2ed0-4eab-b342-888888e92e61.ps1:16 char:9
+2025-12-19T04:57:17.7590939Z +         $ErrorBody = $_.Exception.Response.GetResponseStream()
+2025-12-19T04:57:17.7591257Z +         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2025-12-19T04:57:17.7591568Z     + CategoryInfo          : InvalidOperation: (:) [], ParentContainsErrorRecordException
+2025-12-19T04:57:17.7591897Z     + FullyQualifiedErrorId : InvokeMethodOnNull
+2025-12-19T04:57:17.7592253Z  
+2025-12-19T04:57:17.8072712Z ##[error]Process completed with exit code 1.

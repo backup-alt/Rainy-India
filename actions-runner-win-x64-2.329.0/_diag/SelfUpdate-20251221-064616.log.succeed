@@ -1,0 +1,22 @@
+[21/12/2025 12:16:16.49] --------whoami-------- 
+laptop-f8336m6u\sherwin
+[21/12/2025 12:16:16.55] --------whoami-------- 
+[21/12/2025 12:16:16.56] Waiting for Runner.Listener.exe (6744) to complete 
+Runner.Listener.exe           6744 Console                    1     61,128 K
+[21/12/2025 12:16:16.74] Process 6744 still running, check again after 1 second. 
+Runner.Listener.exe           6744 Console                    1     62,252 K
+[21/12/2025 12:16:17.87] Process 6744 still running, check again after 1 second. 
+[21/12/2025 12:16:19.00] Process 6744 finished running 
+[21/12/2025 12:16:19.00] Sleep 1 more second to make sure process exited 
+[21/12/2025 12:16:20.03] Re-organize folders 
+[21/12/2025 12:16:20.09] move "D:\hoilday\rain\actions-runner-win-x64-2.329.0\bin" "D:\hoilday\rain\actions-runner-win-x64-2.329.0\bin.2.329.0" 
+        1 dir(s) moved.
+[21/12/2025 12:16:20.12] move "D:\hoilday\rain\actions-runner-win-x64-2.329.0\externals" "D:\hoilday\rain\actions-runner-win-x64-2.329.0\externals.2.329.0" 
+        1 dir(s) moved.
+[21/12/2025 12:16:20.14] Create junction bin folder 
+Junction created for D:\hoilday\rain\actions-runner-win-x64-2.329.0\bin <<===>> D:\hoilday\rain\actions-runner-win-x64-2.329.0\bin.2.330.0
+[21/12/2025 12:16:20.15] Create junction externals folder 
+Junction created for D:\hoilday\rain\actions-runner-win-x64-2.329.0\externals <<===>> D:\hoilday\rain\actions-runner-win-x64-2.329.0\externals.2.330.0
+[21/12/2025 12:16:20.18] Update succeed 
+[21/12/2025 12:16:20.19] update.finished file creation succeed 
+[21/12/2025 12:16:20.20] Rename "D:\hoilday\rain\actions-runner-win-x64-2.329.0\_diag\SelfUpdate-20251221-064616.log" to be "D:\hoilday\rain\actions-runner-win-x64-2.329.0\_diag\SelfUpdate-20251221-064616.log.succeed" 

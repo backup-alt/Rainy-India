@@ -1,0 +1,11 @@
+{
+  "stack": "docker",
+  "build_path": ".",
+  "scripts": {
+    "start": "npm start"
+  },
+  "env_variables": {
+    "PORT": "9000"
+  },
+  "memory": 1024
+}

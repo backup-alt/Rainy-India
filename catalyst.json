@@ -1,39 +1,17 @@
 {
-  "projectName": "rainy-india",
-  "projectVersion": "1.0",
-  "projectType": "web",
-  "nodeVersion": "18",
-  "client": {
-    "enabled": true,
-    "source": "client"
-  },
   "functions": {
-    "enabled": true,
     "source": "functions",
-    "targets": [
-      "rainy_scraper",
-      "api_handler",
-      "cron_scraper"
-    ]
+    "targets": ["mail_bot", "tamil_scraper", "rainy_scraper", "cron_scraper", "api_handler"],
+    "ignore": []
   },
-  "datastore": {
-    "enabled": true
-  },
-  "cron": {
-    "enabled": true,
-    "targets": [
-      "scraper_schedule"
-    ]
-  },
-  "appSail": [
+  "appsail": [
     {
-        "source": "vision-service",
-        "stack": "docker",
-        "build_path": ".",
-        "name": "vision",
-        "command": "npm start",
-        "env_variables": {},
-        "memory": 1024
+      "name": "vision",
+      "source": "vision-service",
+      "stack": "docker",
+      "build_path": ".",
+      "command": "node index.js"
     }
   ]
 }
+

@@ -1,0 +1,9 @@
+{
+  "name": "mail_bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "zcatalyst-sdk-node": "latest",
+    "tesseract.js": "^4.1.1"
+  }
+}

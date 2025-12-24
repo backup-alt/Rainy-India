@@ -1,13 +1,5 @@
 {
-  "project": {
-    "name": "rainy-india",
-    "id": "",
-    "timezone": "Asia/Kolkata"
-  },
   "defaults": {
-    "runtime": "nodejs18",
-    "memory": "512",
-    "timeout": "30",
     "project": 1,
     "env": 1
   },

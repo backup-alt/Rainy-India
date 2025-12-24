@@ -1,0 +1,12 @@
+﻿{
+  "repositoryName": "backup-alt/Rainy-India",
+  "pipelineDirectory": "Rainy-India",
+  "workspaceDirectory": "Rainy-India\\Rainy-India",
+  "repositories": {
+    "backup-alt/Rainy-India": {
+      "repositoryPath": "Rainy-India\\Rainy-India",
+      "lastRunOn": "12/17/2025 18:31:18 +05:30"
+    }
+  },
+  "lastRunOn": "12/22/2025 09:13:17 +05:30"
+}

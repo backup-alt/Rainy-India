@@ -1,0 +1,27 @@
+﻿2025-12-19T04:15:57.3738877Z ##[group]Run $ServerUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/execute".Trim()
+2025-12-19T04:15:57.3740379Z [36;1m$ServerUrl = "https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/execute".Trim()[0m
+2025-12-19T04:15:57.3741190Z [36;1mWrite-Host "Target URL: $ServerUrl"[0m
+2025-12-19T04:15:57.3741550Z [36;1m[0m
+2025-12-19T04:15:57.3741958Z [36;1m$Image = Get-ChildItem screenshot_*.jpg | Select-Object -First 1[0m
+2025-12-19T04:15:57.3742423Z [36;1m[0m
+2025-12-19T04:15:57.3742663Z [36;1mif ($Image) {[0m
+2025-12-19T04:15:57.3743048Z [36;1m    $Bytes = [System.IO.File]::ReadAllBytes($Image.FullName)[0m
+2025-12-19T04:15:57.3743599Z [36;1m    $Base64Image = [System.Convert]::ToBase64String($Bytes)[0m
+2025-12-19T04:15:57.3744183Z [36;1m    $Body = @{ image = $Base64Image } | ConvertTo-Json[0m
+2025-12-19T04:15:57.3744514Z [36;1m    [0m
+2025-12-19T04:15:57.3744748Z [36;1m    try {[0m
+2025-12-19T04:15:57.3745442Z [36;1m        $Response = Invoke-WebRequest -Method Post -Uri $ServerUrl -Body $Body -ContentType "application/json" -UseBasicParsing[0m
+2025-12-19T04:15:57.3746404Z [36;1m        Write-Host "Success: $($Response.Content)"[0m
+2025-12-19T04:15:57.3746798Z [36;1m    } catch {[0m
+2025-12-19T04:15:57.3747195Z [36;1m        $ErrorBody = $_.Exception.Response.GetResponseStream()[0m
+2025-12-19T04:15:57.3747774Z [36;1m        $Reader = New-Object System.IO.StreamReader($ErrorBody)[0m
+2025-12-19T04:15:57.3748234Z [36;1m        $Details = $Reader.ReadToEnd()[0m
+2025-12-19T04:15:57.3748703Z [36;1m        Write-Host "Upload Failed. Server said: $Details"[0m
+2025-12-19T04:15:57.3749117Z [36;1m        exit 1[0m
+2025-12-19T04:15:57.3749365Z [36;1m    }[0m
+2025-12-19T04:15:57.3749592Z [36;1m}[0m
+2025-12-19T04:15:57.3776757Z shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
+2025-12-19T04:15:57.3777072Z ##[endgroup]
+2025-12-19T04:15:57.6842240Z Target URL: https://sherwin-60052075848.development.catalystserverless.in/server/ultra_brain/execute
+2025-12-19T04:16:19.2824740Z Upload Failed. Server said: 
+2025-12-19T04:16:19.3271153Z ##[error]Process completed with exit code 1.

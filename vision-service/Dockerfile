@@ -1,39 +1,33 @@
-# 1. Use the official Node.js 18 lightweight image
+# 1. Use the official Node image
 FROM node:18-slim
 
-# 2. Install System Dependencies (Chrome + Tesseract + Tamil Data)
-# We add the Google Chrome signing key and repository
-# Then we install Chrome, Tesseract OCR, and the Tamil Language Pack (tesseract-ocr-tam)
-RUN apt-get update \
-    && apt-get install -y wget gnupg ca-certificates \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
-    && apt-get update \
-    && apt-get install -y \
-       google-chrome-stable \
-       tesseract-ocr \
-       tesseract-ocr-tam \
-       fonts-ipafont-gothic \
-       fonts-wqy-zenhei \
-       fonts-thai-tlwg \
-       fonts-kacst \
-       fonts-freefont-ttf \
-       fonts-indic \
-       libxss1 \
-       --no-install-recommends \
+# 2. Install System Dependencies for Chrome & Tamil OCR
+# We need these because Puppeteer doesn't include the OS-level libraries
+RUN apt-get update && apt-get install -y \
+    wget gnupg ca-certificates \
+    google-chrome-stable \
+    tesseract-ocr \
+    tesseract-ocr-tam \
+    fonts-indic \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Create the App Directory inside the container
-WORKDIR /usr/src/app
+# 3. Setup the AppSail Environment
+# Zoho AppSail mounts your code in /catalyst. We must work there.
+WORKDIR /catalyst
 
-# 4. Copy package definitions first (Optimizes build cache)
+# 4. Install Node Modules
 COPY package*.json ./
+# Skip downloading the bundled Chromium because we installed the stable version above
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true 
+RUN npm install --production
 
-# 5. Install Node.js dependencies
-RUN npm install
-
-# 6. Copy the rest of your bot's code
+# 5. Copy your code
 COPY . .
 
-# 7. Start the Bot
-CMD [ "npm", "start" ]
+# 6. Set Environment Variables
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ENV PORT=9000
+
+# 7. Start the bot
+CMD ["node", "index.js"]

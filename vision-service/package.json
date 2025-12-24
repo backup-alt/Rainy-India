@@ -1,19 +1,19 @@
 {
-  "name": "vision-monitor",
+  "name": "vision-service",
   "version": "1.0.0",
-  "description": "Tamil News Ticker Monitor using OCR",
+  "description": "Tamil News OCR Bot for AppSail Docker",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.6.2",
-    "jimp": "^0.22.10",
     "puppeteer": "^21.5.0",
     "tesseract.js": "^5.0.3",
-    "zcatalyst-sdk-node": "latest"
+    "jimp": "^0.22.10",
+    "zcatalyst-sdk-node": "latest",
+    "axios": "^1.6.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   }
 }

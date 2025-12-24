@@ -4,6 +4,7 @@
 	"main": "index.js",
 	"author": "sherwinaniesh@gmail.com",
 	"dependencies": {
+		"axios": "^1.13.2",
 		"dotenv": "^17.2.3",
 		"rss-parser": "^3.13.0",
 		"zcatalyst-sdk-node": "latest"
