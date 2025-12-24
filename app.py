@@ -1,46 +1,65 @@
 import os
+import io
+import re
+import zipfile
 from flask import Flask, request, jsonify
 from zcatalyst_sdk import catalyst
 
 app = Flask(__name__)
 
+def clean_tamil_text(text):
+    """Removes OCR noise and keeps Tamil, English, and Numbers."""
+    clean = re.sub(r'[^\u0b80-\u0bff a-zA-Z0-9.,!?]', '', text)
+    return re.sub(r'\s+', ' ', clean).strip()
+
 @app.route('/signals', methods=['POST'])
 def handle_signal():
     try:
-        # Initialize Zoho SDK
+        # 1. Initialize Catalyst
         catalyst_app = catalyst.initialize(request)
-        vision = catalyst_app.vision()
-        datastore = catalyst_app.datastore()
+        vision = catalyst_app.vision() # Access Zoho's built-in AI
         
-        # Get the individual JPG frame
-        image_file = request.files.get('file')
+        # 2. Get the ZIP file
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "No ZIP file"}), 400
+        
+        zip_file = request.files['file']
         channel_name = request.args.get('channel', 'Unknown')
         
-        if not image_file:
-            return jsonify({"status": "error", "message": "No image received"}), 400
+        extracted_texts = []
 
-        # OCR: Process this single frame for Tamil text
-        image_content = image_file.read()
-        ocr_response = vision.ocr(image_content, {'language': 'tam'})
-        
-        final_text = ""
-        if ocr_response and 'text' in ocr_response:
-            final_text = ocr_response['text'].strip()
+        # 3. Unzip and Process each image using Zoho Zia
+        with zipfile.ZipFile(zip_file, 'r') as z:
+            for filename in sorted(z.namelist()):
+                if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    with z.open(filename) as f:
+                        image_data = f.read()
+                        
+                        # Call Zoho Zia OCR with Tamil support
+                        ocr_response = vision.ocr(image_data, {'language': 'tam'})
+                        
+                        if ocr_response and 'text' in ocr_response:
+                            cleaned = clean_tamil_text(ocr_response['text'])
+                            if len(cleaned) > 5:
+                                extracted_texts.append(cleaned)
 
-        # Save to DataStore if meaningful text is found
-        if len(final_text) > 5:
+        # 4. Join unique results
+        final_news = " | ".join(list(dict.fromkeys(extracted_texts)))
+
+        # 5. Save to DataStore
+        if final_news:
+            datastore = catalyst_app.datastore()
             table = datastore.table('NewsTicker')
             table.insert_row({
                 'ChannelName': channel_name,
-                'NewsContent': final_text
+                'NewsContent': final_news
             })
-            print(f"✅ Saved News from {channel_name}: {final_text[:30]}...")
 
-        return jsonify({"status": "received"}), 200
+        return jsonify({"status": "success", "channel": channel_name, "news": final_news})
 
     except Exception as e:
-        print(f"❌ Zoho Logic Error: {str(e)}")
-        return jsonify({"status": "error"}), 500
+        print(f"❌ Zia OCR Error: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))

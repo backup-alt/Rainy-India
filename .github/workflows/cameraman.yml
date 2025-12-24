@@ -1,0 +1,117 @@
+name: India News Monitor (Deep Sniffer Cloud)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15,45 * * * *'
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { name: "Thanthi", id: "j1nzTy5q_1Y" }
+          - { name: "Polimer", id: "Ei6NUWLQCQM" }
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install playwright
+          python -m playwright install chromium
+
+      - name: Capture and Signal
+        env:
+          ZOHO_CODE: ${{ secrets.ZOHO_DIGEST }}
+          UA: ${{ secrets.USER_AGENT }}
+          CHANNEL_NAME: ${{ matrix.name }}
+          VIDEO_ID: ${{ matrix.id }}
+        run: |
+          STREAM_URL=$(python3 - <<'EOF'
+          import asyncio
+          import os
+          from playwright.async_api import async_playwright
+          
+          async def get_stream_url():
+              video_id = os.getenv("VIDEO_ID")
+              user_agent = os.getenv("UA")
+              
+              async with async_playwright() as p:
+                  # Launch with arguments to disable automation flags
+                  browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+                  context = await browser.new_context(user_agent=user_agent)
+                  page = await context.new_page()
+                  
+                  stream_link = ""
+                  
+                  def handle_request(request):
+                      nonlocal stream_link
+                      url = request.url
+                      # Searching for the HLS/Master playlist keywords
+                      if ("m3u8" in url or "playlist" in url) and "googlevideo" in url and "stats" not in url:
+                          stream_link = url
+          
+                  page.on("request", handle_request)
+          
+                  try:
+                      await page.goto(f"https://www.youtube.com/watch?v={video_id}", wait_until="networkidle", timeout=60000)
+                      
+                      # Simulate human behavior: Scroll and wait
+                      await page.mouse.wheel(0, 500)
+                      await asyncio.sleep(5)
+                      await page.mouse.wheel(0, -500)
+                      
+                      # Click the player area to ensure focus
+                      await page.click("#movie_player", force=True)
+                      
+                      # Final wait for stream generation
+                      for _ in range(40):
+                          if stream_link:
+                              break
+                          await asyncio.sleep(1)
+                      
+                      if stream_link:
+                          print(stream_link)
+                  except:
+                      pass
+                  finally:
+                      await browser.close()
+          
+          asyncio.run(get_stream_url())
+          EOF
+                    )
+          
+          if [[ "$STREAM_URL" == *"googlevideo"* ]]; then
+              echo "✅ Deep Sniffer succeeded. Capturing..."
+              ffmpeg -i "$STREAM_URL" -vf "fps=0.4,scale=800:-1,crop=800:100:0:380" -t 15 -q:v 5 "shot_%03d.jpg"
+              
+              for img in shot_*.jpg; do
+                  b64_data=$(base64 -w 0 "$img")
+                  curl -X POST "https://api.catalyst.zoho.in/signals/v2/event_notification?digest=$ZOHO_CODE" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"data\": {\"image\": \"$b64_data\", \"channel\": \"$CHANNEL_NAME\"}}"
+                  sleep 2
+              done
+          else
+              echo "❌ Error: Could not find stream. YouTube is blocking GitHub IPs entirely."
+              exit 1
+          fi
+
+      - name: Debug Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-debug
+          path: "*.jpg"
