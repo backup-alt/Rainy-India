@@ -1,33 +1,39 @@
-# 1. Use the official Node image
+# 1. Use the official Node.js 18 lightweight image
 FROM node:18-slim
 
-# 2. Install System Dependencies for Chrome & Tamil OCR
-# We need these because Puppeteer doesn't include the OS-level libraries
+# 2. Install System Dependencies (Chrome + Tesseract + Tamil Data)
+USER root
 RUN apt-get update && apt-get install -y \
-    wget gnupg ca-certificates \
+    wget \
+    gnupg \
+    ca-certificates \
+    --no-install-recommends
+
+# Add Google Chrome's official repository and key
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+
+# Install Chrome, Tesseract OCR, and Tamil Language Pack
+RUN apt-get update && apt-get install -y \
     google-chrome-stable \
     tesseract-ocr \
     tesseract-ocr-tam \
     fonts-indic \
+    libxss1 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Setup the AppSail Environment
-# Zoho AppSail mounts your code in /catalyst. We must work there.
-WORKDIR /catalyst
+# 3. Create the App Directory
+WORKDIR /usr/src/app
 
-# 4. Install Node Modules
+# 4. Copy package definitions
 COPY package*.json ./
-# Skip downloading the bundled Chromium because we installed the stable version above
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true 
-RUN npm install --production
 
-# 5. Copy your code
+# 5. Install Node.js dependencies
+RUN npm install
+
+# 6. Copy the rest of your bot's code
 COPY . .
 
-# 6. Set Environment Variables
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-ENV PORT=9000
-
-# 7. Start the bot
-CMD ["node", "index.js"]
+# 7. Start the Bot
+CMD [ "node", "index.js" ]
