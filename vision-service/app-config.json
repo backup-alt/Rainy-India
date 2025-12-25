@@ -4,8 +4,5 @@
   "scripts": {
     "start": "npm start"
   },
-  "env_variables": {
-    "NODE_ENV": "production" 
-  },
   "memory": 1024
 }
