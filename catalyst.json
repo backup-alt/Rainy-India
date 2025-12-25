@@ -11,7 +11,7 @@
       "stack": "docker",
       "build_path": ".",
       "command": "npm start",
-      "memeory": 1024
+      "memory": 1024
     }
   ]
 }
