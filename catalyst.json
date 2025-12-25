@@ -10,7 +10,8 @@
       "source": "vision-service",
       "stack": "docker",
       "build_path": ".",
-      "command": "node index.js"
+      "command": "npm start",
+      "memeory": 1024
     }
   ]
 }
